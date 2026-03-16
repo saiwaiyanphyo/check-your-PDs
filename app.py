@@ -7,11 +7,11 @@ from huggingface_hub import hf_hub_download
 
 # Download models from HF
 spiral_path = hf_hub_download(
-    repo_id="your-username/parkinsons-detection",
+    repo_id="maggisai/parkinsons-detection",
     filename="spiral_mobilenetv2.keras"
 )
 wave_path = hf_hub_download(
-    repo_id="your-username/parkinsons-detection",
+    repo_id="maggisai/parkinsons-detection",
     filename="wave_mobilenetv2.keras"
 )
 
