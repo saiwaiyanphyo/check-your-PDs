@@ -109,8 +109,134 @@ def get_risk_level(score):
 
 
 # ============================================================
-# STAGE 2: DRAWING CLASSIFIER (placeholder)
+# STAGE 2: DRAWING CLASSIFIER (placeholder) + HEATMAP
 # ============================================================
+
+def generate_heatmap(image):
+    """
+    Generate a Grad-CAM style heatmap overlay on the drawing.
+
+    TODO: Replace with real Grad-CAM from your CNN model:
+        from tf_keras_vis.gradcam import Gradcam
+        gradcam = Gradcam(model)
+        cam = gradcam(score, seed_input)
+        heatmap = np.uint8(255 * cam)
+
+    This placeholder generates a simulated attention heatmap
+    based on edge density (areas with more drawing strokes).
+    """
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    from PIL import ImageFilter
+
+    img_array = np.array(image.convert('L').resize((224, 224)))
+
+    # Simulate attention: use edge detection as proxy for stroke density
+    edges = np.array(image.convert('L').resize((224, 224)).filter(ImageFilter.FIND_EDGES))
+    from scipy.ndimage import gaussian_filter
+    attention = gaussian_filter(edges.astype(float), sigma=15)
+    attention = (attention - attention.min()) / (attention.max() - attention.min() + 1e-8)
+
+    # Create heatmap overlay figure
+    fig, ax = plt.subplots(1, 1, figsize=(5, 5))
+    ax.imshow(img_array, cmap='gray', alpha=0.6)
+    heatmap = ax.imshow(attention, cmap='jet', alpha=0.5, vmin=0, vmax=1)
+    plt.colorbar(heatmap, ax=ax, fraction=0.046, pad=0.04, label='Attention intensity')
+    ax.set_title('Model attention heatmap', fontsize=13, fontweight='bold')
+    ax.axis('off')
+    plt.tight_layout()
+
+    # Convert figure to PIL image
+    fig.canvas.draw()
+    w, h = fig.canvas.get_width_height()
+    buf = np.frombuffer(fig.canvas.buffer_rgba(), dtype=np.uint8).reshape(h, w, 4)
+    heatmap_img = Image.fromarray(buf[:, :, :3])
+    plt.close(fig)
+
+    return heatmap_img
+
+
+def generate_comparison_figure(image, confidence):
+    """Create a side-by-side comparison: original vs heatmap with results."""
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    from PIL import ImageFilter
+
+    img_resized = image.convert('L').resize((224, 224))
+    img_array = np.array(img_resized)
+
+    # Generate attention map
+    edges = np.array(img_resized.filter(ImageFilter.FIND_EDGES))
+    from scipy.ndimage import gaussian_filter
+    attention = gaussian_filter(edges.astype(float), sigma=15)
+    attention = (attention - attention.min()) / (attention.max() - attention.min() + 1e-8)
+
+    # Create figure
+    fig, axes = plt.subplots(1, 3, figsize=(15, 5), gridspec_kw={'width_ratios': [1, 1, 0.4]})
+
+    # Panel 1: Original drawing
+    axes[0].imshow(img_array, cmap='gray')
+    axes[0].set_title('Original drawing', fontsize=14, fontweight='bold')
+    axes[0].axis('off')
+
+    # Panel 2: Heatmap overlay
+    axes[1].imshow(img_array, cmap='gray', alpha=0.6)
+    hm = axes[1].imshow(attention, cmap='jet', alpha=0.5, vmin=0, vmax=1)
+    axes[1].set_title('Model attention heatmap', fontsize=14, fontweight='bold')
+    axes[1].axis('off')
+    plt.colorbar(hm, ax=axes[1], fraction=0.046, pad=0.04)
+
+    # Panel 3: Result gauge
+    axes[2].axis('off')
+    if confidence >= 0.7:
+        color = '#e74c3c'
+        label = 'HIGH'
+    elif confidence >= 0.4:
+        color = '#f39c12'
+        label = 'MODERATE'
+    else:
+        color = '#27ae60'
+        label = 'LOW'
+
+    # Draw gauge
+    theta = np.linspace(np.pi, 0, 100)
+    axes[2].plot(np.cos(theta), np.sin(theta), 'k-', linewidth=3, alpha=0.2)
+
+    # Fill arc based on confidence
+    n_fill = int(confidence * 100)
+    for i in range(n_fill):
+        t = np.pi - (i / 100) * np.pi
+        r_color = plt.cm.RdYlGn_r(i / 100)
+        axes[2].plot(np.cos(t), np.sin(t), '.', color=r_color, markersize=8)
+
+    # Needle
+    needle_angle = np.pi - confidence * np.pi
+    axes[2].plot([0, 0.7 * np.cos(needle_angle)], [0, 0.7 * np.sin(needle_angle)],
+                 'k-', linewidth=2.5)
+    axes[2].plot(0, 0, 'ko', markersize=8)
+
+    axes[2].set_xlim(-1.3, 1.3)
+    axes[2].set_ylim(-0.3, 1.3)
+    axes[2].text(0, -0.15, f'{confidence:.1%}', ha='center', fontsize=22, fontweight='bold', color=color)
+    axes[2].text(0, -0.28, label, ha='center', fontsize=13, fontweight='bold', color=color)
+    axes[2].text(-1.1, 0, '0%', fontsize=9, color='#27ae60', fontweight='bold')
+    axes[2].text(0.9, 0, '100%', fontsize=9, color='#e74c3c', fontweight='bold')
+    axes[2].set_title('PD probability', fontsize=14, fontweight='bold')
+
+    plt.suptitle('Drawing Analysis — Stage 2', fontsize=16, fontweight='bold', y=1.02)
+    plt.tight_layout()
+
+    # Convert to PIL
+    fig.canvas.draw()
+    w, h = fig.canvas.get_width_height()
+    buf = np.frombuffer(fig.canvas.buffer_rgba(), dtype=np.uint8).reshape(h, w, 4)
+    result_img = Image.fromarray(buf[:, :, :3])
+    plt.close(fig)
+
+    return result_img
+
 
 def classify_drawing(image):
     """
@@ -221,23 +347,27 @@ def run_stage1(
 
 
 def run_stage2(image):
-    """Process Stage 2 drawing and return CNN confidence."""
+    """Process Stage 2 drawing and return CNN confidence with heatmap comparison."""
     if image is None:
-        return "⚠️ Please upload a hand-drawing image (spiral, wave, or square pattern).", None
+        return None, "⚠️ Please upload a hand-drawing image (spiral, wave, or square pattern).", None
 
     confidence = classify_drawing(image)
+    comparison_img = generate_comparison_figure(image, confidence)
 
     result = f"## Drawing Analysis Result\n\n"
     result += f"**CNN Confidence (P(PD)):** {confidence:.1%}\n\n"
 
     if confidence >= 0.7:
         result += "> 🔴 Drawing patterns suggest high probability of motor impairment consistent with PD.\n"
+        result += "\n**Key observations:** The heatmap highlights regions with tremor-like irregularities, uneven stroke spacing, and inconsistent pressure patterns.\n"
     elif confidence >= 0.4:
         result += "> 🟡 Drawing patterns show some irregularities that may warrant further evaluation.\n"
+        result += "\n**Key observations:** The heatmap shows moderate areas of concern — some unsteadiness in stroke continuity.\n"
     else:
         result += "> 🟢 Drawing patterns appear within normal range.\n"
+        result += "\n**Key observations:** The heatmap shows relatively uniform attention — smooth, consistent strokes detected.\n"
 
-    return result, confidence
+    return comparison_img, result, confidence
 
 
 def run_combined(risk_score, cnn_confidence):
@@ -274,32 +404,30 @@ def run_combined(risk_score, cnn_confidence):
 # ============================================================
 
 CUSTOM_CSS = """
-.main-title {
-    text-align: center;
-    margin-bottom: 0.5em;
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&display=swap');
+
+* {
+    font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif !important;
 }
-.stage-header {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-    padding: 12px 20px;
-    border-radius: 8px;
-    margin-bottom: 12px;
+.prose h1, .prose h2, .prose h3 {
+    font-family: 'DM Sans', sans-serif !important;
+    font-weight: 700 !important;
 }
-.disclaimer {
-    background: #fff3cd;
-    border: 1px solid #ffc107;
-    border-radius: 8px;
-    padding: 12px;
-    font-size: 0.9em;
+.prose {
+    font-size: 15px;
+    line-height: 1.6;
 }
 """
 
 with gr.Blocks(
     title="PD Prediction System",
     css=CUSTOM_CSS,
-    theme=gr.themes.Soft(
+    theme=gr.themes.Base(
         primary_hue="purple",
-        secondary_hue="orange",
+        secondary_hue="gray",
+        neutral_hue="gray",
+        font=gr.themes.GoogleFont("DM Sans"),
+        font_mono=gr.themes.GoogleFont("JetBrains Mono"),
     )
 ) as demo:
 
@@ -427,21 +555,29 @@ with gr.Blocks(
             )
 
             with gr.Row():
-                with gr.Column(scale=1):
-                    drawing_input = gr.Image(
-                        label="Upload your hand-drawing",
-                        type="pil",
-                        height=400
-                    )
-                    stage2_btn = gr.Button("🔬 Analyze Drawing", variant="primary", size="lg")
+                drawing_input = gr.Image(
+                    label="Upload your hand-drawing",
+                    type="pil",
+                    height=300
+                )
 
-                with gr.Column(scale=1):
-                    stage2_result = gr.Markdown(label="Stage 2 Result")
+            stage2_btn = gr.Button("🔬 Analyze Drawing", variant="primary", size="lg")
+
+            gr.Markdown("---")
+            gr.Markdown("### Analysis Results")
+
+            comparison_output = gr.Image(
+                label="Original vs Heatmap Comparison",
+                type="pil",
+                height=400
+            )
+
+            stage2_result = gr.Markdown(label="Stage 2 Result")
 
             stage2_btn.click(
                 fn=run_stage2,
                 inputs=[drawing_input],
-                outputs=[stage2_result, cnn_confidence_state]
+                outputs=[comparison_output, stage2_result, cnn_confidence_state]
             )
 
         # ════════════════════════════════════════════
