@@ -607,7 +607,7 @@ with gr.Blocks(
 
             gr.Markdown("---")
 
-            stage1_btn = gr.Button("🔍 Calculate Risk Score", variant="primary", size="lg")
+            stage1_btn = gr.Button("Calculate Risk Score", variant="primary", size="lg")
             stage1_result = gr.Markdown(label="Stage 1 Result")
 
             stage1_btn.click(
@@ -694,7 +694,7 @@ with gr.Blocks(
                 """
             )
 
-            combined_btn = gr.Button("📊 Generate Final Assessment", variant="primary", size="lg")
+            combined_btn = gr.Button("Generate Final Assessment", variant="primary", size="lg")
             combined_result = gr.Markdown(label="Combined Result")
 
             combined_btn.click(
@@ -745,9 +745,9 @@ with gr.Blocks(
                 | < 25% | LOW — Continue general health monitoring |
 
                 ### Research Team
-                - Sai Wai Yan Phyo (6722790282)
-                - Kantapon Makpisut (6622781241)
                 - Supervisor: Dr. Sasiporn Usanavasin
+                - Sai Wai Yan Phyo
+                - Kantapon Makpisut
 
                 ### Disclaimer
 
@@ -784,4 +784,4 @@ with gr.Blocks(
 # LAUNCH
 # ============================================================
 if __name__ == "__main__":
-    demo.launch()
+    demo.launch(share=True)
