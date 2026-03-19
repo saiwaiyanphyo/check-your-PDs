@@ -528,7 +528,7 @@ with gr.Blocks(
 
             gr.Markdown("---")
 
-            stage1_btn = gr.Button("🔍 Calculate Risk Score", variant="primary", size="lg")
+            stage1_btn = gr.Button("Calculate Risk Score", variant="primary", size="lg")
             stage1_result = gr.Markdown(label="Stage 1 Result")
 
             stage1_btn.click(
@@ -580,10 +580,10 @@ with gr.Blocks(
                         height=300
                     )
 
-            stage2_btn = gr.Button("🔬 Analyze Drawing", variant="primary", size="lg")
+            stage2_btn = gr.Button("Analyze Drawing", variant="primary", size="lg")
 
             gr.Markdown("---")
-            gr.Markdown("### Analysis Results — Original vs Grad-CAM Heatmap (side by side)")
+            gr.Markdown("### Analysis Results — Original vs Grad-CAM Heatmap")
 
             comparison_output = gr.Image(
                 label="Original Drawing | Grad-CAM Attention Heatmap",
@@ -602,7 +602,7 @@ with gr.Blocks(
         # ════════════════════════════════════════════
         # COMBINED RESULT
         # ════════════════════════════════════════════
-        with gr.Tab("📊 Combined Result", id="combined"):
+        with gr.Tab("Calculate Combined Result", id="combined"):
 
             gr.Markdown(
                 """
@@ -666,9 +666,9 @@ with gr.Blocks(
                 | < 25% | LOW — Continue general health monitoring |
 
                 ### Research Team
-                - Sai Wai Yan Phyo (6722790282)
-                - Kantapon Makpisut (6622781241)
                 - Supervisor: Dr. Sasiporn Usanavasin
+                - Sai Wai Yan Phyo
+                - Kantapon Makpisut
 
                 ### Disclaimer
 
@@ -693,7 +693,7 @@ with gr.Blocks(
         ---
         <center>
         <small>
-        🧠 PD Prediction System v1.1 | Research Project |
+        PD Prediction System v1.1 | Research Project |
         Parkinson's Disease Prediction Using Deep Learning
         </small>
         </center>
