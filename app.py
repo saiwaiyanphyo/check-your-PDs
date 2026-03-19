@@ -5,11 +5,13 @@ Two-Stage: Clinical Risk Scoring + Hand-Drawing Classification
 Stage 1: Clinical questionnaire → Risk score (0-22 points)
 Stage 2: Hand-drawing upload → CNN classifier (PD vs Healthy)
 Combined: Weighted fusion → Final recommendation
+
+Derived from 1,340 hospital records (Udon Thani, Thailand)
 """
 
 import gradio as gr
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont, ImageFilter
 import io
 
 # ============================================================
@@ -109,92 +111,152 @@ def get_risk_level(score):
 
 # ============================================================
 # STAGE 2: DRAWING CLASSIFIER (placeholder) + HEATMAP
+# Pure PIL/numpy — no matplotlib dependency
 # ============================================================
 
-def fig_to_pil(fig):
-    """Safely convert matplotlib figure to PIL Image using BytesIO."""
-    import matplotlib.pyplot as plt
-    buf = io.BytesIO()
-    fig.savefig(buf, format='PNG', bbox_inches='tight', dpi=100)
-    buf.seek(0)
-    img = Image.open(buf).copy()
-    buf.close()
-    plt.close(fig)
-    return img
+def apply_jet_colormap(gray_array):
+    """Convert a float [0,1] grayscale array to jet colormap RGB using pure numpy."""
+    # Jet colormap approximation: blue→cyan→green→yellow→red
+    r = np.clip(1.5 - np.abs(gray_array * 4 - 3), 0, 1)
+    g = np.clip(1.5 - np.abs(gray_array * 4 - 2), 0, 1)
+    b = np.clip(1.5 - np.abs(gray_array * 4 - 1), 0, 1)
+    rgb = np.stack([r, g, b], axis=-1)
+    return (rgb * 255).astype(np.uint8)
+
+
+def gaussian_blur_numpy(arr, sigma=15):
+    """Simple Gaussian blur via repeated box filter — no scipy needed."""
+    from PIL import Image as PILImage
+    pil = PILImage.fromarray((arr * 255).clip(0, 255).astype(np.uint8))
+    # Use PIL's GaussianBlur (radius ≈ sigma)
+    radius = max(1, int(sigma))
+    blurred = pil.filter(ImageFilter.GaussianBlur(radius=radius))
+    result = np.array(blurred).astype(float) / 255.0
+    return result
 
 
 def generate_attention_map(image):
     """
-    Generate a simulated Grad-CAM style attention map.
+    Generate a simulated Grad-CAM style attention map using pure PIL.
 
     TODO: Replace with real Grad-CAM from your MobileNetV2 model:
         from tf_keras_vis.gradcam import Gradcam
         gradcam = Gradcam(model)
         cam = gradcam(score_fn, preprocessed_input)
-        attention = np.uint8(255 * cam[0])
+        attention = cam[0]  # shape (224, 224), values 0-1
     """
-    from PIL import ImageFilter
-    from scipy.ndimage import gaussian_filter
+    SIZE = 224
+    img_resized = image.convert('L').resize((SIZE, SIZE))
+    edges = np.array(img_resized.filter(ImageFilter.FIND_EDGES)).astype(float)
 
-    img_gray = image.convert('L').resize((224, 224))
-    edges = np.array(img_gray.filter(ImageFilter.FIND_EDGES)).astype(float)
-    attention = gaussian_filter(edges, sigma=15)
+    # Normalize edges
+    if edges.max() > edges.min():
+        edges = (edges - edges.min()) / (edges.max() - edges.min())
+
+    # Smooth to make it look like a heat blob
+    attention = gaussian_blur_numpy(edges, sigma=18)
+
+    # Normalize again after blur
     if attention.max() > attention.min():
         attention = (attention - attention.min()) / (attention.max() - attention.min())
-    else:
-        attention = np.zeros_like(attention)
-    return np.array(img_gray), attention
+
+    return img_resized, attention
+
+
+def add_label(canvas, text, x, y, color=(30, 30, 30)):
+    """Draw text label onto a PIL image canvas."""
+    draw = ImageDraw.Draw(canvas)
+    draw.text((x, y), text, fill=color)
+    return canvas
 
 
 def generate_comparison_figure(image, confidence):
     """
-    Create a TRUE side-by-side comparison:
-    Left panel  — Original drawing
-    Right panel — Grad-CAM heatmap overlay
-    Both panels are the same size and sit next to each other horizontally.
+    Pure PIL side-by-side comparison:
+      Left  — Original drawing (grayscale)
+      Right — Grad-CAM heatmap overlay (jet colormap blended over grayscale)
+
+    No matplotlib used — works reliably on HuggingFace Spaces.
     """
-    import matplotlib
-    matplotlib.use('Agg')
-    import matplotlib.pyplot as plt
+    SIZE = 400          # each panel: SIZE x SIZE pixels
+    PADDING = 16        # gap between panels
+    HEADER_H = 44       # top label bar height
+    FOOTER_H = 48       # bottom confidence bar height
+    COLORBAR_W = 28     # colorbar strip width on right
+    TOTAL_W = SIZE * 2 + PADDING * 3 + COLORBAR_W
+    TOTAL_H = HEADER_H + SIZE + FOOTER_H
 
-    img_array, attention = generate_attention_map(image)
+    # ── Prepare base grayscale image ──────────────────────────
+    img_gray_small, attention = generate_attention_map(image)
+    img_gray = img_gray_small.resize((SIZE, SIZE), Image.LANCZOS)
+    gray_arr = np.array(img_gray)                          # (SIZE, SIZE) uint8
+    gray_rgb = np.stack([gray_arr] * 3, axis=-1)           # (SIZE, SIZE, 3)
 
-    # ── Two equal panels side by side ──────────────────────────
-    fig, (ax_orig, ax_heat) = plt.subplots(
-        1, 2,
-        figsize=(10, 5),
-        gridspec_kw={'wspace': 0.08}
-    )
+    # ── Build heatmap overlay panel ───────────────────────────
+    attn_resized = np.array(
+        Image.fromarray((attention * 255).astype(np.uint8)).resize((SIZE, SIZE), Image.LANCZOS)
+    ).astype(float) / 255.0
 
-    # Panel 1: Original drawing
-    ax_orig.imshow(img_array, cmap='gray')
-    ax_orig.set_title('Original Drawing', fontsize=14, fontweight='bold', pad=10)
-    ax_orig.axis('off')
+    jet_rgb = apply_jet_colormap(attn_resized)             # (SIZE, SIZE, 3)
 
-    # Panel 2: Heatmap overlay
-    ax_heat.imshow(img_array, cmap='gray', alpha=0.55)
-    hm = ax_heat.imshow(attention, cmap='jet', alpha=0.50, vmin=0, vmax=1)
-    ax_heat.set_title('Grad-CAM Attention Heatmap', fontsize=14, fontweight='bold', pad=10)
-    ax_heat.axis('off')
+    # Blend: 55% original + 45% jet
+    alpha = 0.45
+    blended = (gray_rgb * (1 - alpha) + jet_rgb * alpha).clip(0, 255).astype(np.uint8)
 
-    # Shared colorbar attached to heatmap panel only
-    cbar = fig.colorbar(hm, ax=ax_heat, fraction=0.046, pad=0.04)
-    cbar.set_label('Attention intensity', fontsize=10)
+    # ── Build colorbar strip ──────────────────────────────────
+    cbar_vals = np.linspace(1.0, 0.0, SIZE).reshape(-1, 1)  # top=high, bottom=low
+    cbar_jet = apply_jet_colormap(np.repeat(cbar_vals, COLORBAR_W, axis=1))
+    cbar_img = Image.fromarray(cbar_jet)
 
-    # Confidence badge in suptitle
+    # ── Compose final canvas ──────────────────────────────────
+    BG = (245, 245, 248)
+    canvas = Image.new('RGB', (TOTAL_W, TOTAL_H), color=BG)
+
+    # Left panel: original
+    x_left = PADDING
+    canvas.paste(Image.fromarray(gray_rgb.astype(np.uint8)), (x_left, HEADER_H))
+
+    # Right panel: heatmap
+    x_right = PADDING * 2 + SIZE
+    canvas.paste(Image.fromarray(blended), (x_right, HEADER_H))
+
+    # Colorbar
+    x_cbar = x_right + SIZE + PADDING // 2
+    canvas.paste(cbar_img, (x_cbar, HEADER_H))
+
+    # ── Draw labels ───────────────────────────────────────────
+    draw = ImageDraw.Draw(canvas)
+
+    # Panel headers
+    draw.text((x_left + SIZE // 2 - 60, 12), "Original Drawing",     fill=(40, 40, 40))
+    draw.text((x_right + SIZE // 2 - 80, 12), "Grad-CAM Attention Heatmap", fill=(40, 40, 40))
+
+    # Colorbar labels
+    draw.text((x_cbar, HEADER_H - 2),          "Hi", fill=(80, 80, 80))
+    draw.text((x_cbar, HEADER_H + SIZE - 14),  "Lo", fill=(80, 80, 80))
+
+    # Divider line between panels
+    draw.line([(x_right - PADDING // 2, HEADER_H),
+               (x_right - PADDING // 2, HEADER_H + SIZE)],
+              fill=(200, 200, 200), width=1)
+
+    # ── Footer confidence bar ─────────────────────────────────
+    footer_y = HEADER_H + SIZE
+    draw.rectangle([(0, footer_y), (TOTAL_W, TOTAL_H)], fill=(235, 235, 240))
+
     if confidence >= 0.7:
-        badge = f"PD Probability: {confidence:.1%}  🔴 HIGH"
-        title_color = '#c0392b'
+        badge_color = (192, 57, 43)
+        badge_text  = f"PD Probability: {confidence:.1%}   HIGH RISK"
     elif confidence >= 0.4:
-        badge = f"PD Probability: {confidence:.1%}  🟡 MODERATE"
-        title_color = '#d35400'
+        badge_color = (211, 84, 0)
+        badge_text  = f"PD Probability: {confidence:.1%}   MODERATE RISK"
     else:
-        badge = f"PD Probability: {confidence:.1%}  🟢 LOW"
-        title_color = '#27ae60'
+        badge_color = (39, 174, 96)
+        badge_text  = f"PD Probability: {confidence:.1%}   LOW RISK"
 
-    fig.suptitle(badge, fontsize=15, fontweight='bold', color=title_color, y=1.02)
+    draw.text((PADDING, footer_y + 14), badge_text, fill=badge_color)
 
-    return fig_to_pil(fig)
+    return canvas
 
 
 def classify_drawing(image):
@@ -540,7 +602,7 @@ with gr.Blocks(
         # ════════════════════════════════════════════
         # COMBINED RESULT
         # ════════════════════════════════════════════
-        with gr.Tab("Combined Result", id="combined"):
+        with gr.Tab("📊 Combined Result", id="combined"):
 
             gr.Markdown(
                 """
@@ -553,7 +615,7 @@ with gr.Blocks(
                 """
             )
 
-            combined_btn = gr.Button("Generate Final Assessment", variant="primary", size="lg")
+            combined_btn = gr.Button("📊 Generate Final Assessment", variant="primary", size="lg")
             combined_result = gr.Markdown(label="Combined Result")
 
             combined_btn.click(
@@ -604,10 +666,10 @@ with gr.Blocks(
                 | < 25% | LOW — Continue general health monitoring |
 
                 ### Research Team
+                - Sai Wai Yan Phyo (6722790282)
+                - Kantapon Makpisut (6622781241)
                 - Supervisor: Dr. Sasiporn Usanavasin
-                - Sai Wai Yan Phyo
-                - Kantapon Makpisut
-                
+
                 ### Disclaimer
 
                 ⚠️ This tool is for **preliminary screening purposes only** and does not
@@ -631,7 +693,7 @@ with gr.Blocks(
         ---
         <center>
         <small>
-        PD Prediction System v1.1 | Research Project |
+        🧠 PD Prediction System v1.1 | Research Project |
         Parkinson's Disease Prediction Using Deep Learning
         </small>
         </center>
