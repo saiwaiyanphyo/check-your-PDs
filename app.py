@@ -170,91 +170,170 @@ def add_label(canvas, text, x, y, color=(30, 30, 30)):
     return canvas
 
 
+def draw_annotation(draw, canvas_arr, attn_resized, x_offset, y_offset, size, threshold_high=0.72, threshold_mid=0.45):
+    """
+    Find high-attention regions and draw labeled arrows pointing to them.
+    Returns a list of (label, description) tuples for the legend.
+    """
+    annotations = []
+
+    # ── Find centroid of HIGH attention zone (red) ────────────
+    high_mask = attn_resized >= threshold_high
+    if high_mask.sum() > 50:
+        ys, xs = np.where(high_mask)
+        cx = int(xs.mean() * size / attn_resized.shape[1]) + x_offset
+        cy = int(ys.mean() * size / attn_resized.shape[0]) + y_offset
+
+        # Arrow: from label outside → centroid
+        lx = cx - 70 if cx > x_offset + size // 2 else cx + 70
+        ly = max(cy - 40, y_offset + 10)
+        draw.line([(lx, ly), (cx, cy)], fill=(220, 30, 30), width=2)
+        # Arrowhead
+        draw.polygon([(cx, cy), (cx-5, cy-8), (cx+5, cy-8)], fill=(220, 30, 30))
+        # Label box
+        draw.rectangle([(lx - 2, ly - 14), (lx + 98, ly + 2)], fill=(220, 30, 30))
+        draw.text((lx, ly - 13), "Stroke irregularity", fill=(255, 255, 255))
+        annotations.append(("🔴 Red zone", "High tremor / irregular stroke pattern"))
+
+    # ── Find centroid of MID attention zone (yellow/orange) ───
+    mid_mask = (attn_resized >= threshold_mid) & (attn_resized < threshold_high)
+    if mid_mask.sum() > 100:
+        ys, xs = np.where(mid_mask)
+        # Pick a point near the edge of mid zone for variety
+        idx = len(xs) // 3
+        cx2 = int(xs[idx] * size / attn_resized.shape[1]) + x_offset
+        cy2 = int(ys[idx] * size / attn_resized.shape[0]) + y_offset
+
+        lx2 = cx2 + 60 if cx2 < x_offset + size // 2 else cx2 - 60
+        ly2 = min(cy2 + 40, y_offset + size - 20)
+        draw.line([(lx2, ly2), (cx2, cy2)], fill=(200, 120, 0), width=2)
+        draw.polygon([(cx2, cy2), (cx2-5, cy2+6), (cx2+5, cy2+6)], fill=(200, 120, 0))
+        draw.rectangle([(lx2 - 2, ly2), (lx2 + 92, ly2 + 14)], fill=(200, 120, 0))
+        draw.text((lx2, ly2 + 1), "Uneven spacing", fill=(255, 255, 255))
+        annotations.append(("🟡 Yellow zone", "Moderate pressure variation / uneven spacing"))
+
+    # ── Low attention zone label ───────────────────────────────
+    low_mask = attn_resized < 0.25
+    if low_mask.sum() > 200:
+        ys, xs = np.where(low_mask)
+        idx = len(xs) // 2
+        cx3 = int(xs[idx] * size / attn_resized.shape[1]) + x_offset
+        cy3 = int(ys[idx] * size / attn_resized.shape[0]) + y_offset
+        cy3 = min(cy3, y_offset + size - 25)
+
+        draw.rectangle([(cx3 - 2, cy3 - 2), (cx3 + 76, cy3 + 12)], fill=(30, 100, 180))
+        draw.text((cx3, cy3 - 1), "Smooth strokes", fill=(255, 255, 255))
+        annotations.append(("🔵 Blue zone", "Normal smooth strokes — low PD contribution"))
+
+    return annotations
+
+
 def generate_comparison_figure(image, confidence):
     """
-    Pure PIL side-by-side comparison:
+    Pure PIL side-by-side comparison with PD-specific annotations:
       Left  — Original drawing (grayscale)
-      Right — Grad-CAM heatmap overlay (jet colormap blended over grayscale)
+      Right — Grad-CAM heatmap overlay with labeled region annotations
 
+    Annotations explain which parts of the drawing contribute to PD detection.
     No matplotlib used — works reliably on HuggingFace Spaces.
     """
-    SIZE = 400          # each panel: SIZE x SIZE pixels
+    SIZE = 420          # each panel: SIZE x SIZE pixels
     PADDING = 16        # gap between panels
     HEADER_H = 44       # top label bar height
-    FOOTER_H = 48       # bottom confidence bar height
-    COLORBAR_W = 28     # colorbar strip width on right
+    COLORBAR_W = 36     # colorbar strip + labels
+    LEGEND_H = 110      # bottom legend area
     TOTAL_W = SIZE * 2 + PADDING * 3 + COLORBAR_W
-    TOTAL_H = HEADER_H + SIZE + FOOTER_H
+    TOTAL_H = HEADER_H + SIZE + LEGEND_H
 
     # ── Prepare base grayscale image ──────────────────────────
     img_gray_small, attention = generate_attention_map(image)
     img_gray = img_gray_small.resize((SIZE, SIZE), Image.LANCZOS)
-    gray_arr = np.array(img_gray)                          # (SIZE, SIZE) uint8
-    gray_rgb = np.stack([gray_arr] * 3, axis=-1)           # (SIZE, SIZE, 3)
+    gray_arr = np.array(img_gray)
+    gray_rgb = np.stack([gray_arr] * 3, axis=-1)
 
     # ── Build heatmap overlay panel ───────────────────────────
     attn_resized = np.array(
         Image.fromarray((attention * 255).astype(np.uint8)).resize((SIZE, SIZE), Image.LANCZOS)
     ).astype(float) / 255.0
 
-    jet_rgb = apply_jet_colormap(attn_resized)             # (SIZE, SIZE, 3)
-
-    # Blend: 55% original + 45% jet
+    jet_rgb = apply_jet_colormap(attn_resized)
     alpha = 0.45
     blended = (gray_rgb * (1 - alpha) + jet_rgb * alpha).clip(0, 255).astype(np.uint8)
 
     # ── Build colorbar strip ──────────────────────────────────
-    cbar_vals = np.linspace(1.0, 0.0, SIZE).reshape(-1, 1)  # top=high, bottom=low
-    cbar_jet = apply_jet_colormap(np.repeat(cbar_vals, COLORBAR_W, axis=1))
+    cbar_vals = np.linspace(1.0, 0.0, SIZE).reshape(-1, 1)
+    cbar_jet = apply_jet_colormap(np.repeat(cbar_vals, 18, axis=1))
     cbar_img = Image.fromarray(cbar_jet)
 
-    # ── Compose final canvas ──────────────────────────────────
-    BG = (245, 245, 248)
+    # ── Compose canvas ────────────────────────────────────────
+    BG = (248, 248, 250)
     canvas = Image.new('RGB', (TOTAL_W, TOTAL_H), color=BG)
 
-    # Left panel: original
-    x_left = PADDING
-    canvas.paste(Image.fromarray(gray_rgb.astype(np.uint8)), (x_left, HEADER_H))
-
-    # Right panel: heatmap
+    x_left  = PADDING
     x_right = PADDING * 2 + SIZE
-    canvas.paste(Image.fromarray(blended), (x_right, HEADER_H))
+    x_cbar  = x_right + SIZE + 6
 
-    # Colorbar
-    x_cbar = x_right + SIZE + PADDING // 2
+    canvas.paste(Image.fromarray(gray_rgb.astype(np.uint8)), (x_left, HEADER_H))
+    canvas.paste(Image.fromarray(blended), (x_right, HEADER_H))
     canvas.paste(cbar_img, (x_cbar, HEADER_H))
 
-    # ── Draw labels ───────────────────────────────────────────
     draw = ImageDraw.Draw(canvas)
 
-    # Panel headers
-    draw.text((x_left + SIZE // 2 - 60, 12), "Original Drawing",     fill=(40, 40, 40))
-    draw.text((x_right + SIZE // 2 - 80, 12), "Grad-CAM Attention Heatmap", fill=(40, 40, 40))
+    # ── Panel headers ─────────────────────────────────────────
+    draw.rectangle([(x_left, 0), (x_left + SIZE, HEADER_H - 2)], fill=(60, 60, 80))
+    draw.text((x_left + SIZE // 2 - 55, 13), "Original Drawing", fill=(255, 255, 255))
 
-    # Colorbar labels
-    draw.text((x_cbar, HEADER_H - 2),          "Hi", fill=(80, 80, 80))
-    draw.text((x_cbar, HEADER_H + SIZE - 14),  "Lo", fill=(80, 80, 80))
+    draw.rectangle([(x_right, 0), (x_right + SIZE, HEADER_H - 2)], fill=(60, 60, 80))
+    draw.text((x_right + SIZE // 2 - 80, 13), "Grad-CAM Attention Map", fill=(255, 255, 255))
 
-    # Divider line between panels
-    draw.line([(x_right - PADDING // 2, HEADER_H),
+    # ── Colorbar labels ───────────────────────────────────────
+    draw.text((x_cbar + 20, HEADER_H),           "High", fill=(180, 30, 30))
+    draw.text((x_cbar + 20, HEADER_H + SIZE//2 - 6), "Mid",  fill=(160, 100, 0))
+    draw.text((x_cbar + 20, HEADER_H + SIZE - 14), "Low",  fill=(30, 60, 180))
+
+    # Colorbar border
+    draw.rectangle([(x_cbar - 1, HEADER_H - 1), (x_cbar + 19, HEADER_H + SIZE + 1)],
+                   outline=(160, 160, 160), width=1)
+
+    # ── PD Annotations on heatmap panel ──────────────────────
+    annotations = draw_annotation(
+        draw, blended, attn_resized,
+        x_offset=x_right, y_offset=HEADER_H, size=SIZE
+    )
+
+    # ── Divider ───────────────────────────────────────────────
+    draw.line([(x_right - PADDING // 2, 0),
                (x_right - PADDING // 2, HEADER_H + SIZE)],
-              fill=(200, 200, 200), width=1)
+              fill=(200, 200, 210), width=1)
 
-    # ── Footer confidence bar ─────────────────────────────────
-    footer_y = HEADER_H + SIZE
-    draw.rectangle([(0, footer_y), (TOTAL_W, TOTAL_H)], fill=(235, 235, 240))
+    # ── Legend area ───────────────────────────────────────────
+    legend_y = HEADER_H + SIZE
+    draw.rectangle([(0, legend_y), (TOTAL_W, TOTAL_H)], fill=(38, 38, 52))
 
+    # Confidence badge (left side)
     if confidence >= 0.7:
-        badge_color = (192, 57, 43)
-        badge_text  = f"PD Probability: {confidence:.1%}   HIGH RISK"
+        badge_color = (255, 100, 90)
+        badge_text  = f"PD Probability: {confidence:.1%}  ▲ HIGH RISK"
     elif confidence >= 0.4:
-        badge_color = (211, 84, 0)
-        badge_text  = f"PD Probability: {confidence:.1%}   MODERATE RISK"
+        badge_color = (255, 180, 60)
+        badge_text  = f"PD Probability: {confidence:.1%}  ● MODERATE RISK"
     else:
-        badge_color = (39, 174, 96)
-        badge_text  = f"PD Probability: {confidence:.1%}   LOW RISK"
+        badge_color = (80, 210, 130)
+        badge_text  = f"PD Probability: {confidence:.1%}  ▼ LOW RISK"
 
-    draw.text((PADDING, footer_y + 14), badge_text, fill=badge_color)
+    draw.text((PADDING, legend_y + 10), badge_text, fill=badge_color)
+
+    # Zone legend (right side of footer)
+    zone_defs = [
+        ((220, 60, 60),  "Red   = High attention: tremor / stroke irregularity"),
+        ((210, 140, 0),  "Yellow = Mid attention: uneven spacing / pressure variation"),
+        ((40, 100, 200), "Blue   = Low attention: smooth normal strokes"),
+    ]
+    lx_start = TOTAL_W // 2
+    for i, (col, label) in enumerate(zone_defs):
+        ty = legend_y + 8 + i * 30
+        draw.rectangle([(lx_start, ty + 2), (lx_start + 14, ty + 14)], fill=col)
+        draw.text((lx_start + 20, ty), label, fill=(210, 210, 220))
 
     return canvas
 
@@ -528,7 +607,7 @@ with gr.Blocks(
 
             gr.Markdown("---")
 
-            stage1_btn = gr.Button("Calculate Risk Score", variant="primary", size="lg")
+            stage1_btn = gr.Button("🔍 Calculate Risk Score", variant="primary", size="lg")
             stage1_result = gr.Markdown(label="Stage 1 Result")
 
             stage1_btn.click(
@@ -580,10 +659,10 @@ with gr.Blocks(
                         height=300
                     )
 
-            stage2_btn = gr.Button("Analyze Drawing", variant="primary", size="lg")
+            stage2_btn = gr.Button("🔬 Analyze Drawing", variant="primary", size="lg")
 
             gr.Markdown("---")
-            gr.Markdown("### Analysis Results — Original vs Grad-CAM Heatmap")
+            gr.Markdown("### Analysis Results — Original vs Grad-CAM Heatmap (side by side)")
 
             comparison_output = gr.Image(
                 label="Original Drawing | Grad-CAM Attention Heatmap",
@@ -602,7 +681,7 @@ with gr.Blocks(
         # ════════════════════════════════════════════
         # COMBINED RESULT
         # ════════════════════════════════════════════
-        with gr.Tab("Calculate Combined Result", id="combined"):
+        with gr.Tab("📊 Combined Result", id="combined"):
 
             gr.Markdown(
                 """
@@ -666,9 +745,9 @@ with gr.Blocks(
                 | < 25% | LOW — Continue general health monitoring |
 
                 ### Research Team
+                - Sai Wai Yan Phyo (6722790282)
+                - Kantapon Makpisut (6622781241)
                 - Supervisor: Dr. Sasiporn Usanavasin
-                - Sai Wai Yan Phyo
-                - Kantapon Makpisut
 
                 ### Disclaimer
 
@@ -693,7 +772,7 @@ with gr.Blocks(
         ---
         <center>
         <small>
-        PD Prediction System v1.1 | Research Project |
+        🧠 PD Prediction System v1.1 | Research Project |
         Parkinson's Disease Prediction Using Deep Learning
         </small>
         </center>
