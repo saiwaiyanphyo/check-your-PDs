@@ -12,6 +12,7 @@ Derived from 1,340 hospital records (Udon Thani, Thailand)
 import gradio as gr
 import numpy as np
 from PIL import Image
+import io
 
 # ============================================================
 # STAGE 1: RISK SCORING ENGINE
@@ -112,153 +113,108 @@ def get_risk_level(score):
 # STAGE 2: DRAWING CLASSIFIER (placeholder) + HEATMAP
 # ============================================================
 
-def generate_heatmap(image):
-    """
-    Generate a Grad-CAM style heatmap overlay on the drawing.
+def fig_to_pil(fig):
+    """Safely convert matplotlib figure to PIL Image using BytesIO."""
+    import matplotlib.pyplot as plt
+    buf = io.BytesIO()
+    fig.savefig(buf, format='PNG', bbox_inches='tight', dpi=100)
+    buf.seek(0)
+    img = Image.open(buf).copy()
+    buf.close()
+    plt.close(fig)
+    return img
 
-    TODO: Replace with real Grad-CAM from your CNN model:
+
+def generate_attention_map(image):
+    """
+    Generate a simulated Grad-CAM style attention map.
+
+    TODO: Replace with real Grad-CAM from your MobileNetV2 model:
         from tf_keras_vis.gradcam import Gradcam
         gradcam = Gradcam(model)
-        cam = gradcam(score, seed_input)
-        heatmap = np.uint8(255 * cam)
-
-    This placeholder generates a simulated attention heatmap
-    based on edge density (areas with more drawing strokes).
+        cam = gradcam(score_fn, preprocessed_input)
+        attention = np.uint8(255 * cam[0])
     """
-    import matplotlib
-    matplotlib.use('Agg')
-    import matplotlib.pyplot as plt
     from PIL import ImageFilter
-
-    img_array = np.array(image.convert('L').resize((224, 224)))
-
-    # Simulate attention: use edge detection as proxy for stroke density
-    edges = np.array(image.convert('L').resize((224, 224)).filter(ImageFilter.FIND_EDGES))
     from scipy.ndimage import gaussian_filter
-    attention = gaussian_filter(edges.astype(float), sigma=15)
-    attention = (attention - attention.min()) / (attention.max() - attention.min() + 1e-8)
 
-    # Create heatmap overlay figure
-    fig, ax = plt.subplots(1, 1, figsize=(5, 5))
-    ax.imshow(img_array, cmap='gray', alpha=0.6)
-    heatmap = ax.imshow(attention, cmap='jet', alpha=0.5, vmin=0, vmax=1)
-    plt.colorbar(heatmap, ax=ax, fraction=0.046, pad=0.04, label='Attention intensity')
-    ax.set_title('Model attention heatmap', fontsize=13, fontweight='bold')
-    ax.axis('off')
-    plt.tight_layout()
-
-    # Convert figure to PIL image
-    fig.canvas.draw()
-    w, h = fig.canvas.get_width_height()
-    buf = np.frombuffer(fig.canvas.buffer_rgba(), dtype=np.uint8).reshape(h, w, 4)
-    heatmap_img = Image.fromarray(buf[:, :, :3])
-    plt.close(fig)
-
-    return heatmap_img
+    img_gray = image.convert('L').resize((224, 224))
+    edges = np.array(img_gray.filter(ImageFilter.FIND_EDGES)).astype(float)
+    attention = gaussian_filter(edges, sigma=15)
+    if attention.max() > attention.min():
+        attention = (attention - attention.min()) / (attention.max() - attention.min())
+    else:
+        attention = np.zeros_like(attention)
+    return np.array(img_gray), attention
 
 
 def generate_comparison_figure(image, confidence):
-    """Create a side-by-side comparison: original vs heatmap with results."""
+    """
+    Create a TRUE side-by-side comparison:
+    Left panel  — Original drawing
+    Right panel — Grad-CAM heatmap overlay
+    Both panels are the same size and sit next to each other horizontally.
+    """
     import matplotlib
     matplotlib.use('Agg')
     import matplotlib.pyplot as plt
-    from PIL import ImageFilter
 
-    img_resized = image.convert('L').resize((224, 224))
-    img_array = np.array(img_resized)
+    img_array, attention = generate_attention_map(image)
 
-    # Generate attention map
-    edges = np.array(img_resized.filter(ImageFilter.FIND_EDGES))
-    from scipy.ndimage import gaussian_filter
-    attention = gaussian_filter(edges.astype(float), sigma=15)
-    attention = (attention - attention.min()) / (attention.max() - attention.min() + 1e-8)
-
-    # Create figure
-    fig, axes = plt.subplots(1, 3, figsize=(15, 5), gridspec_kw={'width_ratios': [1, 1, 0.4]})
+    # ── Two equal panels side by side ──────────────────────────
+    fig, (ax_orig, ax_heat) = plt.subplots(
+        1, 2,
+        figsize=(10, 5),
+        gridspec_kw={'wspace': 0.08}
+    )
 
     # Panel 1: Original drawing
-    axes[0].imshow(img_array, cmap='gray')
-    axes[0].set_title('Original drawing', fontsize=14, fontweight='bold')
-    axes[0].axis('off')
+    ax_orig.imshow(img_array, cmap='gray')
+    ax_orig.set_title('Original Drawing', fontsize=14, fontweight='bold', pad=10)
+    ax_orig.axis('off')
 
     # Panel 2: Heatmap overlay
-    axes[1].imshow(img_array, cmap='gray', alpha=0.6)
-    hm = axes[1].imshow(attention, cmap='jet', alpha=0.5, vmin=0, vmax=1)
-    axes[1].set_title('Model attention heatmap', fontsize=14, fontweight='bold')
-    axes[1].axis('off')
-    plt.colorbar(hm, ax=axes[1], fraction=0.046, pad=0.04)
+    ax_heat.imshow(img_array, cmap='gray', alpha=0.55)
+    hm = ax_heat.imshow(attention, cmap='jet', alpha=0.50, vmin=0, vmax=1)
+    ax_heat.set_title('Grad-CAM Attention Heatmap', fontsize=14, fontweight='bold', pad=10)
+    ax_heat.axis('off')
 
-    # Panel 3: Result gauge
-    axes[2].axis('off')
+    # Shared colorbar attached to heatmap panel only
+    cbar = fig.colorbar(hm, ax=ax_heat, fraction=0.046, pad=0.04)
+    cbar.set_label('Attention intensity', fontsize=10)
+
+    # Confidence badge in suptitle
     if confidence >= 0.7:
-        color = '#e74c3c'
-        label = 'HIGH'
+        badge = f"PD Probability: {confidence:.1%}  🔴 HIGH"
+        title_color = '#c0392b'
     elif confidence >= 0.4:
-        color = '#f39c12'
-        label = 'MODERATE'
+        badge = f"PD Probability: {confidence:.1%}  🟡 MODERATE"
+        title_color = '#d35400'
     else:
-        color = '#27ae60'
-        label = 'LOW'
+        badge = f"PD Probability: {confidence:.1%}  🟢 LOW"
+        title_color = '#27ae60'
 
-    # Draw gauge
-    theta = np.linspace(np.pi, 0, 100)
-    axes[2].plot(np.cos(theta), np.sin(theta), 'k-', linewidth=3, alpha=0.2)
+    fig.suptitle(badge, fontsize=15, fontweight='bold', color=title_color, y=1.02)
 
-    # Fill arc based on confidence
-    n_fill = int(confidence * 100)
-    for i in range(n_fill):
-        t = np.pi - (i / 100) * np.pi
-        r_color = plt.cm.RdYlGn_r(i / 100)
-        axes[2].plot(np.cos(t), np.sin(t), '.', color=r_color, markersize=8)
-
-    # Needle
-    needle_angle = np.pi - confidence * np.pi
-    axes[2].plot([0, 0.7 * np.cos(needle_angle)], [0, 0.7 * np.sin(needle_angle)],
-                 'k-', linewidth=2.5)
-    axes[2].plot(0, 0, 'ko', markersize=8)
-
-    axes[2].set_xlim(-1.3, 1.3)
-    axes[2].set_ylim(-0.3, 1.3)
-    axes[2].text(0, -0.15, f'{confidence:.1%}', ha='center', fontsize=22, fontweight='bold', color=color)
-    axes[2].text(0, -0.28, label, ha='center', fontsize=13, fontweight='bold', color=color)
-    axes[2].text(-1.1, 0, '0%', fontsize=9, color='#27ae60', fontweight='bold')
-    axes[2].text(0.9, 0, '100%', fontsize=9, color='#e74c3c', fontweight='bold')
-    axes[2].set_title('PD probability', fontsize=14, fontweight='bold')
-
-    plt.suptitle('Drawing Analysis — Stage 2', fontsize=16, fontweight='bold', y=1.02)
-    plt.tight_layout()
-
-    # Convert to PIL
-    fig.canvas.draw()
-    w, h = fig.canvas.get_width_height()
-    buf = np.frombuffer(fig.canvas.buffer_rgba(), dtype=np.uint8).reshape(h, w, 4)
-    result_img = Image.fromarray(buf[:, :, :3])
-    plt.close(fig)
-
-    return result_img
+    return fig_to_pil(fig)
 
 
 def classify_drawing(image):
     """
-    Placeholder for your CNN classifier.
+    Placeholder for your MobileNetV2 CNN classifier.
 
     TODO: Replace this with your actual model inference:
-      - Load your trained model (VGG19 / ResNet50 / CNN-BLSTM)
-      - Preprocess the image (grayscale, normalize, resize)
-      - Return P(PD) confidence between 0 and 1
-
-    Example with a real model:
         from tensorflow.keras.models import load_model
-        model = load_model('your_model.h5')
-        img = preprocess(image)
-        confidence = model.predict(img)[0][0]
-        return float(confidence)
+        model = load_model('your_mobilenetv2_model.h5')
+        img = preprocess_input(np.array(image.resize((224, 224))))
+        img = np.expand_dims(img, axis=0)
+        confidence = float(model.predict(img)[0][0])
+        return confidence
     """
     if image is None:
         return None
 
-    # === PLACEHOLDER: Random confidence for demo ===
-    # Replace this entire block with your real model
+    # === PLACEHOLDER: simulated confidence for demo ===
     np.random.seed(hash(str(image.size)) % 2**32)
     confidence = float(np.random.beta(3, 2))
     return confidence
@@ -280,22 +236,18 @@ def combined_prediction(risk_score, cnn_confidence, max_score=22):
 
     if combined >= 0.70:
         rec = "HIGH PROBABILITY"
-        color = "red"
         advice = "Strongly recommend consultation with a neurologist for comprehensive evaluation."
     elif combined >= 0.45:
         rec = "MODERATE PROBABILITY"
-        color = "orange"
         advice = "Recommend scheduling a medical evaluation. Early detection enables better management."
     elif combined >= 0.25:
         rec = "LOW-MODERATE"
-        color = "goldenrod"
         advice = "Consider monitoring symptoms. Consult a doctor if symptoms worsen or new ones appear."
     else:
         rec = "LOW PROBABILITY"
-        color = "green"
         advice = "Low risk based on current assessment. Continue monitoring general health."
 
-    return combined, rec, color, advice
+    return combined, rec, advice
 
 
 # ============================================================
@@ -310,7 +262,6 @@ def run_stage1(
     bedridden, walk_with_aid,
     has_cva, has_all_metabolic
 ):
-    """Process Stage 1 questionnaire and return risk assessment."""
     score, breakdown = compute_risk_score(
         age, sex,
         tremor, bradykinesia, rigidity,
@@ -322,7 +273,6 @@ def run_stage1(
 
     level, weight, emoji = get_risk_level(score)
 
-    # Build result text
     result = f"## {emoji} Risk Level: {level}\n\n"
     result += f"**Score: {score} / 22 points**\n\n"
 
@@ -346,15 +296,20 @@ def run_stage1(
     return result, score
 
 
-def run_stage2(image):
-    """Process Stage 2 drawing and return CNN confidence with heatmap comparison."""
+def run_stage2(image, drawing_type):
+    """Process Stage 2 drawing and return CNN confidence with side-by-side heatmap."""
     if image is None:
-        return None, "⚠️ Please upload a hand-drawing image (spiral, wave, or square pattern).", None
+        return None, "⚠️ Please upload a hand-drawing image (spiral or wave pattern).", None
 
     confidence = classify_drawing(image)
-    comparison_img = generate_comparison_figure(image, confidence)
 
-    result = f"## Drawing Analysis Result\n\n"
+    try:
+        comparison_img = generate_comparison_figure(image, confidence)
+    except Exception as e:
+        comparison_img = None
+        print(f"Heatmap generation error: {e}")
+
+    result = f"## Drawing Analysis Result ({drawing_type})\n\n"
     result += f"**CNN Confidence (P(PD)):** {confidence:.1%}\n\n"
 
     if confidence >= 0.7:
@@ -371,13 +326,12 @@ def run_stage2(image):
 
 
 def run_combined(risk_score, cnn_confidence):
-    """Combine both stages into final prediction."""
     if risk_score is None:
         return "⚠️ Please complete Stage 1 (questionnaire) first."
     if cnn_confidence is None:
         return "⚠️ Please complete Stage 2 (drawing upload) first."
 
-    combined, rec, color, advice = combined_prediction(int(risk_score), float(cnn_confidence))
+    combined, rec, advice = combined_prediction(int(risk_score), float(cnn_confidence))
     level, weight, emoji = get_risk_level(int(risk_score))
 
     result = f"# Final Assessment\n\n"
@@ -541,10 +495,9 @@ with gr.Blocks(
 
                 Please draw one of the following patterns on paper and upload a photo:
 
-                **Recommended patterns:**
+                **Accepted patterns:**
                 - 🌀 **Spiral** — Draw an Archimedean spiral (best for PD detection)
                 - 〰️ **Wave** — Draw a continuous wave pattern
-                - ⬜ **Square/Circle** — Draw geometric shapes
 
                 **Tips for best results:**
                 - Use a **white paper** with a **dark pen**
@@ -555,35 +508,41 @@ with gr.Blocks(
             )
 
             with gr.Row():
-                drawing_input = gr.Image(
-                    label="Upload your hand-drawing",
-                    type="pil",
-                    height=300
-                )
+                with gr.Column(scale=1):
+                    drawing_type = gr.Radio(
+                        choices=["Spiral", "Wave"],
+                        label="Drawing type",
+                        value="Spiral"
+                    )
+                    drawing_input = gr.Image(
+                        label="Upload your hand-drawing",
+                        type="pil",
+                        height=300
+                    )
 
             stage2_btn = gr.Button("🔬 Analyze Drawing", variant="primary", size="lg")
 
             gr.Markdown("---")
-            gr.Markdown("### Analysis Results")
+            gr.Markdown("### Analysis Results — Original vs Grad-CAM Heatmap (side by side)")
 
             comparison_output = gr.Image(
-                label="Original vs Heatmap Comparison",
+                label="Original Drawing | Grad-CAM Attention Heatmap",
                 type="pil",
-                height=400
+                height=420
             )
 
             stage2_result = gr.Markdown(label="Stage 2 Result")
 
             stage2_btn.click(
                 fn=run_stage2,
-                inputs=[drawing_input],
+                inputs=[drawing_input, drawing_type],
                 outputs=[comparison_output, stage2_result, cnn_confidence_state]
             )
 
         # ════════════════════════════════════════════
         # COMBINED RESULT
         # ════════════════════════════════════════════
-        with gr.Tab("📊 Combined Result", id="combined"):
+        with gr.Tab("Combined Result", id="combined"):
 
             gr.Markdown(
                 """
@@ -596,7 +555,7 @@ with gr.Blocks(
                 """
             )
 
-            combined_btn = gr.Button("📊 Generate Final Assessment", variant="primary", size="lg")
+            combined_btn = gr.Button("Generate Final Assessment", variant="primary", size="lg")
             combined_result = gr.Markdown(label="Combined Result")
 
             combined_btn.click(
@@ -618,14 +577,14 @@ with gr.Blocks(
                 | Stage | Input | Method | Output |
                 |-------|-------|--------|--------|
                 | **Stage 1** | Clinical questionnaire | Point-based risk scoring | Risk score (0-22) |
-                | **Stage 2** | Hand-drawing image | CNN classifier | PD probability (0-1) |
+                | **Stage 2** | Hand-drawing image (Spiral or Wave) | MobileNetV2 CNN classifier | PD probability (0-1) |
                 | **Combined** | Both scores | Weighted fusion (35/65) | Final recommendation |
 
                 ### Risk Scoring System
 
                 The clinical risk scoring system was derived from analysis of **1,340 confirmed
                 Parkinson's disease patient records** from a hospital in Udon Thani, Thailand
-                (2567-2568 BE). Features were extracted from clinical notes using NLP techniques.
+                (2567-2568 BE).
 
                 | Risk Level | Score | Weight | Description |
                 |-----------|-------|--------|-------------|
@@ -647,10 +606,10 @@ with gr.Blocks(
                 | < 25% | LOW — Continue general health monitoring |
 
                 ### Research Team
-                - Sai Wai Yan Phyo (6722790282)
-                - Kantapon Makpisut (6622781241)
                 - Supervisor: Dr. Sasiporn Usanavasin
-
+                - Sai Wai Yan Phyo
+                - Kantapon Makpisut
+                
                 ### Disclaimer
 
                 ⚠️ This tool is for **preliminary screening purposes only** and does not
@@ -662,8 +621,8 @@ with gr.Blocks(
                 ### References
 
                 - Du, Q., et al. (2024). Parkinson's Disease Detection by Using Machine
-                  Learning Method based on Local Classification on Class Boundary.
-                  *Discover Applied Sciences*, 6:576.
+                Learning Method based on Local Classification on Class Boundary.
+                *Discover Applied Sciences*, 6:576.
                 - Hospital clinical data: 1,340 records, Udon Thani, Thailand (2567-2568 BE)
                 """
             )
@@ -674,7 +633,7 @@ with gr.Blocks(
         ---
         <center>
         <small>
-        🧠 PD Prediction System v1.0 | Research Project |
+        PD Prediction System v1.1 | Research Project |
         Parkinson's Disease Prediction Using Deep Learning
         </small>
         </center>
