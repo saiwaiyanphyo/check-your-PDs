@@ -5,8 +5,6 @@ Two-Stage: Clinical Risk Scoring + Hand-Drawing Classification
 Stage 1: Clinical questionnaire → Risk score (0-22 points)
 Stage 2: Hand-drawing upload → CNN classifier (PD vs Healthy)
 Combined: Weighted fusion → Final recommendation
-
-Derived from 1,340 hospital records (Udon Thani, Thailand)
 """
 
 import gradio as gr
