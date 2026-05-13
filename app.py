@@ -1,5 +1,5 @@
 """
-🧠 Parkinson's Disease Prediction System
+🧠 Parkinson's Disease Preliminary Prediction System
 Two-Stage: Clinical Risk Scoring + Hand-Drawing Classification
 
 Stage 1: Clinical questionnaire → Risk score (0-22 points)
