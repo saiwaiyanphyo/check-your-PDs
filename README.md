@@ -1,6 +1,5 @@
 ---
 title: PD Prediction System
-emoji: 🧠
 colorFrom: purple
 colorTo: pink
 sdk: gradio
