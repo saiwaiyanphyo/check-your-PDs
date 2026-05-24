@@ -17,7 +17,7 @@ import os
 
 from scoring import compute_risk_score, get_risk_level
 from classifier import load_models, classify_drawing
-from heatmap import generate_comparison_figure
+from heatmap import generate_heatmap
 
 app = FastAPI(title="PD Prediction API", version="1.0.0")
 
@@ -82,32 +82,34 @@ async def stage2(
     file: UploadFile = File(...),
     drawing_type: str = Form(default="Spiral"),
 ):
-    if file.content_type not in ("image/jpeg", "image/png", "image/webp", "image/bmp"):
-        raise HTTPException(400, "Unsupported image format. Use JPEG or PNG.")
+    allowed = ("image/jpeg", "image/png", "image/webp", "image/bmp", "application/octet-stream")
+    if file.content_type and file.content_type not in allowed:
+        raise HTTPException(400, f"Unsupported image format: {file.content_type}")
 
     raw = await file.read()
     from PIL import Image
     image = Image.open(io.BytesIO(raw)).convert("RGB")
 
     model_key = drawing_type.lower()
-    if model_key not in models:
-        model_key = "spiral"
+    model = models.get(model_key) or models.get("spiral")
 
-    confidence = classify_drawing(image, models[model_key])
+    confidence = classify_drawing(image, model)
 
+    heatmap_b64 = None
+    anomaly_regions: list = []
     try:
-        heatmap_img = generate_comparison_figure(image, confidence)
+        heatmap_img, anomaly_regions = generate_heatmap(image, model, confidence)
         buf = io.BytesIO()
         heatmap_img.save(buf, format="PNG")
         heatmap_b64 = base64.b64encode(buf.getvalue()).decode()
     except Exception as e:
         print(f"Heatmap error: {e}")
-        heatmap_b64 = None
 
     return {
         "confidence": round(confidence, 4),
         "drawing_type": drawing_type,
         "heatmap_base64": heatmap_b64,
+        "anomaly_regions": anomaly_regions,
     }
 
 

@@ -3,10 +3,7 @@
 import { useState } from "react";
 import { fetchCombined, CombinedResult } from "@/lib/api";
 
-interface Props {
-  riskScore: number | null;
-  cnnConfidence: number | null;
-}
+interface Props { riskScore: number | null; cnnConfidence: number | null }
 
 export default function CombinedResultPanel({ riskScore, cnnConfidence }: Props) {
   const [result, setResult] = useState<CombinedResult | null>(null);
@@ -15,118 +12,153 @@ export default function CombinedResultPanel({ riskScore, cnnConfidence }: Props)
 
   const submit = async () => {
     if (riskScore === null || cnnConfidence === null) return;
-    setLoading(true);
-    setError("");
-    try {
-      const res = await fetchCombined(riskScore, cnnConfidence);
-      setResult(res);
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Unknown error");
-    } finally {
-      setLoading(false);
-    }
+    setLoading(true); setError("");
+    try { setResult(await fetchCombined(riskScore, cnnConfidence)); }
+    catch (e: unknown) { setError(e instanceof Error ? e.message : "Request failed"); }
+    finally { setLoading(false); }
   };
 
   const missing = riskScore === null || cnnConfidence === null;
+  const pct = result ? Math.round(result.combined_score * 100) : 0;
 
-  const scoreColor = result
-    ? result.combined_score >= 0.7 ? "text-red-500" : result.combined_score >= 0.45 ? "text-yellow-500" : "text-green-500"
-    : "";
-
-  const badgeClass = result
+  const style = result
     ? result.combined_score >= 0.7
-      ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+      ? { bar: "bg-rose-500",    badge: "bg-rose-100 text-rose-700",       ring: "ring-rose-200" }
       : result.combined_score >= 0.45
-      ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"
-      : "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-    : "";
+      ? { bar: "bg-amber-400",   badge: "bg-amber-100 text-amber-700",     ring: "ring-amber-200" }
+      : { bar: "bg-emerald-500", badge: "bg-emerald-100 text-emerald-700", ring: "ring-emerald-200" }
+    : null;
 
   return (
-    <div className="space-y-6">
-      <section className="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm border border-gray-100 dark:border-gray-700">
-        <h3 className="font-semibold text-gray-700 dark:text-gray-200 mb-3">Inputs from Previous Stages</h3>
-        <div className="grid grid-cols-2 gap-4">
-          <div className={`rounded-lg p-4 ${riskScore !== null ? "bg-purple-50 dark:bg-purple-900/20" : "bg-gray-50 dark:bg-gray-700"}`}>
-            <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Stage 1 — Clinical Score</p>
-            {riskScore !== null
-              ? <p className="text-2xl font-bold text-purple-600 mt-1">{riskScore} / 22</p>
-              : <p className="text-sm text-gray-400 mt-1">Not completed yet</p>}
-          </div>
-          <div className={`rounded-lg p-4 ${cnnConfidence !== null ? "bg-purple-50 dark:bg-purple-900/20" : "bg-gray-50 dark:bg-gray-700"}`}>
-            <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Stage 2 — CNN Confidence</p>
-            {cnnConfidence !== null
-              ? <p className="text-2xl font-bold text-purple-600 mt-1">{(cnnConfidence * 100).toFixed(1)}%</p>
-              : <p className="text-sm text-gray-400 mt-1">Not completed yet</p>}
-          </div>
+    <div className="space-y-5">
+
+      {/* Inputs summary */}
+      <div className="grid grid-cols-2 gap-4">
+        <InputCard label="Stage 1 — Clinical Score" value={riskScore !== null ? `${riskScore} / 22` : null} unit="" />
+        <InputCard label="Stage 2 — CNN Confidence" value={cnnConfidence !== null ? `${Math.round(cnnConfidence * 100)}` : null} unit="%" />
+      </div>
+
+      {missing && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-700">
+          Complete both Stage 1 and Stage 2 before generating the final assessment.
         </div>
+      )}
 
-        {missing && (
-          <p className="text-sm text-amber-600 dark:text-amber-400 mt-3 flex items-center gap-1">
-            ⚠️ Please complete both Stage 1 and Stage 2 before generating the final result.
-          </p>
-        )}
-      </section>
+      {error && <p className="text-sm text-rose-500 bg-rose-50 border border-rose-200 rounded-xl px-4 py-3">{error}</p>}
 
-      {error && <p className="text-red-500 text-sm">{error}</p>}
-
-      <button
-        onClick={submit}
-        disabled={missing || loading}
-        className="w-full py-3 bg-purple-600 hover:bg-purple-700 disabled:bg-purple-300 text-white font-semibold rounded-xl transition-colors text-sm"
-      >
-        {loading ? "Generating..." : "Generate Final Assessment"}
+      <button onClick={submit} disabled={missing || loading}
+        className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white font-semibold rounded-xl transition-colors text-sm shadow-sm">
+        {loading ? "Generating…" : "Generate Final Assessment"}
       </button>
 
-      {result && (
+      {result && style && (
         <div className="space-y-4">
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold text-xl text-gray-800 dark:text-gray-100">Final Assessment</h3>
-              <span className={`text-3xl font-bold ${scoreColor}`}>{(result.combined_score * 100).toFixed(1)}%</span>
+
+          {/* Score card */}
+          <div className={`bg-white rounded-2xl border border-slate-200 p-4 sm:p-6 ring-2 ${style.ring}`}>
+            <div className="flex items-start justify-between gap-3 mb-4">
+              <div>
+                <p className="text-xs text-slate-400 uppercase tracking-wide font-medium mb-1">Combined Score</p>
+                <p className="text-5xl font-bold text-slate-800">{pct}<span className="text-2xl text-slate-400 font-normal">%</span></p>
+              </div>
+              <span className={`px-3 py-1.5 rounded-full text-sm font-bold flex-shrink-0 ${style.badge}`}>{result.recommendation}</span>
             </div>
 
-            <span className={`inline-block px-4 py-1.5 rounded-full text-sm font-bold mb-4 ${badgeClass}`}>
-              {result.recommendation}
-            </span>
+            <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden mb-5">
+              <div className={`h-full rounded-full transition-all duration-700 ${style.bar}`} style={{ width: `${pct}%` }} />
+            </div>
 
-            <p className="text-sm text-gray-600 dark:text-gray-300 mb-5">{result.advice}</p>
+            <p className="text-sm text-slate-700 leading-relaxed">{result.advice}</p>
+          </div>
 
-            <div className="bg-gray-50 dark:bg-gray-700 rounded-lg overflow-hidden">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-gray-100 dark:bg-gray-600">
-                    <th className="text-left px-4 py-2 text-gray-600 dark:text-gray-200 font-semibold">Component</th>
-                    <th className="text-left px-4 py-2 text-gray-600 dark:text-gray-200 font-semibold">Value</th>
-                    <th className="text-left px-4 py-2 text-gray-600 dark:text-gray-200 font-semibold">Weight</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr className="border-t border-gray-200 dark:border-gray-600">
-                    <td className="px-4 py-2 text-gray-600 dark:text-gray-300">Clinical Risk Score</td>
-                    <td className="px-4 py-2 font-medium">{riskScore} / 22 ({result.risk_level})</td>
-                    <td className="px-4 py-2 text-gray-500">35% (×{result.risk_weight})</td>
-                  </tr>
-                  <tr className="border-t border-gray-200 dark:border-gray-600">
-                    <td className="px-4 py-2 text-gray-600 dark:text-gray-300">Drawing CNN Confidence</td>
-                    <td className="px-4 py-2 font-medium">{((cnnConfidence ?? 0) * 100).toFixed(1)}%</td>
-                    <td className="px-4 py-2 text-gray-500">65%</td>
-                  </tr>
-                  <tr className="border-t border-gray-200 dark:border-gray-600 bg-purple-50 dark:bg-purple-900/20">
-                    <td className="px-4 py-2 font-bold text-gray-800 dark:text-gray-100">Combined Score</td>
-                    <td className={`px-4 py-2 font-bold text-lg ${scoreColor}`}>{(result.combined_score * 100).toFixed(1)}%</td>
-                    <td className="px-4 py-2" />
-                  </tr>
-                </tbody>
-              </table>
+          {/* Breakdown table */}
+          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+            <div className="px-4 sm:px-6 py-4 border-b border-slate-100">
+              <p className="text-sm font-semibold text-slate-700">Score Breakdown</p>
+            </div>
+            {/* Desktop table */}
+            <table className="hidden sm:table w-full text-sm">
+              <thead className="bg-slate-50 text-xs text-slate-400 uppercase tracking-wide">
+                <tr>
+                  <th className="text-left px-6 py-3">Component</th>
+                  <th className="text-left px-6 py-3">Value</th>
+                  <th className="text-right px-6 py-3">Weight</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                <tr>
+                  <td className="px-6 py-3 text-slate-600">Clinical Risk Score</td>
+                  <td className="px-6 py-3 font-medium text-slate-800">
+                    {riskScore} / 22
+                    <span className={`ml-2 text-xs px-2 py-0.5 rounded-full ${
+                      result.risk_level === "High" ? "bg-rose-100 text-rose-700" :
+                      result.risk_level === "Medium" ? "bg-amber-100 text-amber-700" :
+                      "bg-emerald-100 text-emerald-700"
+                    }`}>{result.risk_level}</span>
+                  </td>
+                  <td className="px-6 py-3 text-right text-slate-500">35% × {result.risk_weight}</td>
+                </tr>
+                <tr>
+                  <td className="px-6 py-3 text-slate-600">Drawing CNN Confidence</td>
+                  <td className="px-6 py-3 font-medium text-slate-800">{Math.round((cnnConfidence ?? 0) * 100)}%</td>
+                  <td className="px-6 py-3 text-right text-slate-500">65%</td>
+                </tr>
+                <tr className="bg-indigo-50">
+                  <td className="px-6 py-3 font-bold text-slate-800">Combined Score</td>
+                  <td className="px-6 py-3 font-bold text-indigo-700 text-base">{pct}%</td>
+                  <td className="px-6 py-3" />
+                </tr>
+              </tbody>
+            </table>
+            {/* Mobile stacked cards */}
+            <div className="sm:hidden divide-y divide-slate-100">
+              <div className="px-4 py-3 flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-slate-400 mb-0.5">Clinical Risk Score</p>
+                  <p className="font-medium text-slate-800">
+                    {riskScore} / 22
+                    <span className={`ml-2 text-xs px-2 py-0.5 rounded-full ${
+                      result.risk_level === "High" ? "bg-rose-100 text-rose-700" :
+                      result.risk_level === "Medium" ? "bg-amber-100 text-amber-700" :
+                      "bg-emerald-100 text-emerald-700"
+                    }`}>{result.risk_level}</span>
+                  </p>
+                </div>
+                <p className="text-xs text-slate-500">35% × {result.risk_weight}</p>
+              </div>
+              <div className="px-4 py-3 flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-slate-400 mb-0.5">Drawing CNN Confidence</p>
+                  <p className="font-medium text-slate-800">{Math.round((cnnConfidence ?? 0) * 100)}%</p>
+                </div>
+                <p className="text-xs text-slate-500">65%</p>
+              </div>
+              <div className="px-4 py-3 bg-indigo-50 flex items-center justify-between">
+                <p className="font-bold text-slate-800">Combined Score</p>
+                <p className="font-bold text-indigo-700 text-base">{pct}%</p>
+              </div>
             </div>
           </div>
 
-          <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl p-4 text-sm text-amber-800 dark:text-amber-300">
-            ⚠️ <strong>Disclaimer:</strong> This tool is for preliminary screening only and does not constitute a medical diagnosis.
-            Always consult a qualified healthcare professional for evaluation and diagnosis of Parkinson&apos;s disease.
+          {/* Disclaimer */}
+          <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 sm:p-5 text-sm">
+            <p className="font-semibold text-amber-800 mb-1">Medical Disclaimer</p>
+            <p className="text-amber-700 leading-relaxed">This tool is for preliminary screening only and does not constitute a medical diagnosis. Always consult a qualified neurologist for proper evaluation.</p>
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function InputCard({ label, value, unit }: { label: string; value: string | null; unit: string }) {
+  return (
+    <div className={`rounded-2xl border p-5 ${value !== null ? "bg-white border-slate-200" : "bg-slate-50 border-slate-200 border-dashed"}`}>
+      <p className="text-xs text-slate-400 mb-2">{label}</p>
+      {value !== null
+        ? <p className="text-2xl font-bold text-slate-800">{value}<span className="text-base font-normal text-slate-400">{unit}</span></p>
+        : <p className="text-sm text-slate-400 italic">Not completed</p>
+      }
     </div>
   );
 }

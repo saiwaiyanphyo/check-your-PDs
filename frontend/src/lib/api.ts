@@ -60,10 +60,20 @@ export interface Stage1Result {
   breakdown: string[];
 }
 
+export interface AnomalyRegion {
+  id: number;
+  x_norm: number;
+  y_norm: number;
+  intensity: number;
+  label: string;
+  severity: string;
+}
+
 export interface Stage2Result {
   confidence: number;
   drawing_type: string;
   heatmap_base64: string | null;
+  anomaly_regions: AnomalyRegion[];
 }
 
 export interface CombinedResult {

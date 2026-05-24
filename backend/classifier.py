@@ -19,12 +19,15 @@ def load_models():
         import tensorflow as tf
         for key, path in MODEL_PATHS.items():
             if os.path.exists(path):
-                loaded[key] = tf.keras.models.load_model(path)
-                print(f"Loaded model: {key} from {path}")
+                try:
+                    loaded[key] = tf.keras.models.load_model(path)
+                    print(f"Loaded model: {key} from {path}")
+                except Exception as e:
+                    print(f"Failed to load {key} model: {e} — using placeholder.")
             else:
                 print(f"Model file not found: {path}")
-    except ImportError:
-        print("TensorFlow not installed — models not loaded, using placeholder.")
+    except Exception as e:
+        print(f"TensorFlow unavailable ({e}) — using placeholder classifier.")
     return loaded
 
 
