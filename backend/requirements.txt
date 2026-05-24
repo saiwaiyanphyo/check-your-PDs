@@ -3,4 +3,4 @@ uvicorn[standard]
 python-multipart
 Pillow
 numpy
-tensorflow-macos
+tensorflow
