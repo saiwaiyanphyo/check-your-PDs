@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { fetchStage1, Stage1Input, Stage1Result } from "@/lib/api";
 
 const AGES = ["Under 40", "40-49", "50-59", "60-69", "70-79", "80+"];
@@ -65,6 +65,7 @@ export default function Stage1Form({ onResult, onNext }: Props) {
   const [result, setResult] = useState<Stage1Result | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const resultRef = useRef<HTMLDivElement>(null);
 
   const set = (key: keyof Stage1Input, value: boolean | string) =>
     setForm(f => ({ ...f, [key]: value }));
@@ -75,6 +76,7 @@ export default function Stage1Form({ onResult, onNext }: Props) {
       const res = await fetchStage1(form);
       setResult(res);
       onResult(res, res.score);
+      setTimeout(() => resultRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Request failed");
     } finally { setLoading(false); }
@@ -157,7 +159,7 @@ export default function Stage1Form({ onResult, onNext }: Props) {
       </button>
 
       {result && (
-        <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-6 space-y-5">
+        <div ref={resultRef} className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-6 space-y-5">
           <div className="flex items-start justify-between mb-4">
             <div>
               <p className="text-xs text-slate-400 uppercase tracking-wide font-medium mb-1">Risk Score</p>

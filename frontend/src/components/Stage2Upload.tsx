@@ -21,6 +21,7 @@ export default function Stage2Upload({ onResult, onNext }: Props) {
   const [error, setError] = useState("");
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const resultRef = useRef<HTMLDivElement>(null);
 
   const handleFile = (f: File) => {
     setFile(f); setPreview(URL.createObjectURL(f)); setResult(null);
@@ -32,6 +33,7 @@ export default function Stage2Upload({ onResult, onNext }: Props) {
     try {
       const res = await fetchStage2(file, drawingType);
       setResult(res); onResult(res, res.confidence);
+      setTimeout(() => resultRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Request failed");
     } finally { setLoading(false); }
@@ -130,7 +132,7 @@ export default function Stage2Upload({ onResult, onNext }: Props) {
 
       {/* Results */}
       {result && riskLabel && (
-        <div className="space-y-4">
+        <div ref={resultRef} className="space-y-4">
           <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-6">
             <div className="flex items-start justify-between mb-4 gap-3">
               <div>

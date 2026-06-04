@@ -31,13 +31,16 @@ export default function Home() {
       {/* Top nav */}
       <header className="bg-white border-b border-slate-200">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3 flex-shrink-0">
-            <div className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center text-white text-lg font-bold">P</div>
+          <button
+            onClick={() => setTab("stage1")}
+            className="flex items-center gap-3 flex-shrink-0 group"
+          >
+            <div className="w-9 h-9 rounded-xl bg-indigo-600 group-hover:bg-indigo-700 transition-colors flex items-center justify-center text-white text-lg font-bold">P</div>
             <div>
               <p className="text-sm font-semibold text-slate-800 leading-none">PD Screening</p>
               <p className="text-xs text-slate-400 mt-0.5 hidden sm:block">Parkinson&apos;s Disease Prediction System</p>
             </div>
-          </div>
+          </button>
 
           <button
             onClick={() => setTab("about")}
