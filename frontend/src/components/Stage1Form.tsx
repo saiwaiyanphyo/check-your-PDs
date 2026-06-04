@@ -58,9 +58,9 @@ const defaultForm: Stage1Input = {
   has_cva: false, has_all_metabolic: false,
 };
 
-interface Props { onResult: (result: Stage1Result, score: number) => void }
+interface Props { onResult: (result: Stage1Result, score: number) => void; onNext: () => void }
 
-export default function Stage1Form({ onResult }: Props) {
+export default function Stage1Form({ onResult, onNext }: Props) {
   const [form, setForm] = useState<Stage1Input>(defaultForm);
   const [result, setResult] = useState<Stage1Result | null>(null);
   const [loading, setLoading] = useState(false);
@@ -157,7 +157,7 @@ export default function Stage1Form({ onResult }: Props) {
       </button>
 
       {result && (
-        <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-6">
+        <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-6 space-y-5">
           <div className="flex items-start justify-between mb-4">
             <div>
               <p className="text-xs text-slate-400 uppercase tracking-wide font-medium mb-1">Risk Score</p>
@@ -185,6 +185,13 @@ export default function Stage1Form({ onResult }: Props) {
               </div>
             </div>
           )}
+
+          <button
+            onClick={onNext}
+            className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl transition-colors text-sm shadow-sm"
+          >
+            Next: Drawing Analysis →
+          </button>
         </div>
       )}
     </div>

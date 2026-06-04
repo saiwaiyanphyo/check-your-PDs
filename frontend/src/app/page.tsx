@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Check, Clipboard, Lock, Shield, Target, Trash2, type LucideIcon } from "lucide-react";
+import { Check, Clipboard, Info, Lock, Shield, Target, Trash2, type LucideIcon } from "lucide-react";
 import Stage1Form from "@/components/Stage1Form";
 import Stage2Upload from "@/components/Stage2Upload";
 import CombinedResult from "@/components/CombinedResult";
@@ -20,14 +20,7 @@ export default function Home() {
   const steps = [
     { id: "stage1" as Tab,   num: 1, label: "Clinical Questionnaire", short: "Stage 1" },
     { id: "stage2" as Tab,   num: 2, label: "Drawing Analysis",        short: "Stage 2" },
-    { id: "combined" as Tab, num: 3, label: "Final Assessment",        short: "Combined" },
-  ];
-
-  const navTabs: { id: Tab; label: string }[] = [
-    { id: "stage1",   label: "Stage 1" },
-    { id: "stage2",   label: "Stage 2" },
-    { id: "combined", label: "Combined" },
-    { id: "about",    label: "About" },
+    { id: "combined" as Tab, num: 3, label: "Final Assessment",        short: "Results" },
   ];
 
   const stagesDone = [riskScore !== null, cnnConfidence !== null];
@@ -40,27 +33,23 @@ export default function Home() {
         <div className="max-w-5xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 flex-shrink-0">
             <div className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center text-white text-lg font-bold">P</div>
-            <div className="hidden sm:block">
+            <div>
               <p className="text-sm font-semibold text-slate-800 leading-none">PD Screening</p>
-              <p className="text-xs text-slate-400 mt-0.5">Parkinson&apos;s Disease Prediction System</p>
+              <p className="text-xs text-slate-400 mt-0.5 hidden sm:block">Parkinson&apos;s Disease Prediction System</p>
             </div>
           </div>
 
-          <nav className="flex items-center gap-1 overflow-x-auto flex-shrink min-w-0">
-            {navTabs.map(({ id, label }) => (
-              <button
-                key={id}
-                onClick={() => setTab(id)}
-                className={`px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
-                  tab === id
-                    ? "bg-indigo-50 text-indigo-700"
-                    : "text-slate-500 hover:text-slate-800 hover:bg-slate-50"
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </nav>
+          <button
+            onClick={() => setTab("about")}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+              tab === "about"
+                ? "bg-indigo-50 text-indigo-700"
+                : "text-slate-500 hover:text-slate-800 hover:bg-slate-50"
+            }`}
+          >
+            <Info className="w-4 h-4" />
+            <span className="hidden sm:inline">About</span>
+          </button>
         </div>
       </header>
 
@@ -68,7 +57,7 @@ export default function Home() {
       {tab !== "about" && (
         <div className="bg-white border-b border-slate-100">
           <div className="max-w-5xl mx-auto px-4 sm:px-6 py-4">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 sm:gap-3">
               {steps.map((s, i) => {
                 const done = stagesDone[i] ?? false;
                 const active = tab === s.id;
@@ -82,7 +71,7 @@ export default function Home() {
                       }`}>
                         {done ? <Check className="w-3.5 h-3.5" /> : s.num}
                       </span>
-                      <span className={`text-xs sm:text-sm font-medium hidden xs:block transition-colors ${
+                      <span className={`text-xs sm:text-sm font-medium transition-colors ${
                         active ? "text-indigo-700" : done ? "text-emerald-600" : "text-slate-400"
                       }`}>
                         <span className="hidden sm:inline">{s.label}</span>
@@ -108,7 +97,7 @@ export default function Home() {
               <h2 className="text-xl font-bold text-slate-800">Clinical Questionnaire</h2>
               <p className="text-sm text-slate-500 mt-1">Check all symptoms that apply. This generates a risk score out of 22 points.</p>
             </div>
-            <Stage1Form onResult={handleStage1Result} />
+            <Stage1Form onResult={handleStage1Result} onNext={() => setTab("stage2")} />
           </>
         )}
 
@@ -118,7 +107,7 @@ export default function Home() {
               <h2 className="text-xl font-bold text-slate-800">Drawing Analysis</h2>
               <p className="text-sm text-slate-500 mt-1">Upload a hand-drawn spiral or wave pattern for CNN-based motor analysis.</p>
             </div>
-            <Stage2Upload onResult={handleStage2Result} />
+            <Stage2Upload onResult={handleStage2Result} onNext={() => setTab("combined")} />
           </>
         )}
 
@@ -132,13 +121,13 @@ export default function Home() {
           </>
         )}
 
-        {tab === "about" && <AboutTab />}
+        {tab === "about" && <AboutTab onBack={() => setTab("stage1")} />}
       </main>
     </div>
   );
 }
 
-function AboutTab() {
+function AboutTab({ onBack }: { onBack: () => void }) {
   return (
     <div className="space-y-6 max-w-3xl">
       <div className="mb-2">
@@ -302,6 +291,13 @@ function AboutTab() {
         <p className="font-semibold mb-1">Medical Disclaimer</p>
         <p className="text-amber-700 leading-relaxed">This tool is for preliminary screening only and does not constitute a medical diagnosis. Always consult a qualified healthcare professional for evaluation of Parkinson&apos;s disease.</p>
       </div>
+
+      <button
+        onClick={onBack}
+        className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl transition-colors text-sm shadow-sm"
+      >
+        ← Back to Screening
+      </button>
     </div>
   );
 }

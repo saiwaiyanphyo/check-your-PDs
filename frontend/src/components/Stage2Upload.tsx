@@ -10,9 +10,9 @@ function regionStyle(intensity: number) {
   return                        { bg: "bg-blue-50 border-blue-200",   badge: "bg-blue-500",   text: "text-blue-800"   };
 }
 
-interface Props { onResult: (result: Stage2Result, confidence: number) => void }
+interface Props { onResult: (result: Stage2Result, confidence: number) => void; onNext: () => void }
 
-export default function Stage2Upload({ onResult }: Props) {
+export default function Stage2Upload({ onResult, onNext }: Props) {
   const [drawingType, setDrawingType] = useState<"Spiral" | "Wave">("Spiral");
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
@@ -192,6 +192,13 @@ export default function Stage2Upload({ onResult }: Props) {
               </div>
             </div>
           )}
+
+          <button
+            onClick={onNext}
+            className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl transition-colors text-sm shadow-sm"
+          >
+            Next: View Final Assessment →
+          </button>
         </div>
       )}
     </div>
