@@ -2,10 +2,12 @@
 
 import { useState } from "react";
 import { fetchCombined, CombinedResult } from "@/lib/api";
+import { useLocale } from "@/lib/i18n";
 
 interface Props { riskScore: number | null; cnnConfidence: number | null }
 
 export default function CombinedResultPanel({ riskScore, cnnConfidence }: Props) {
+  const { t } = useLocale();
   const [result, setResult] = useState<CombinedResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -34,13 +36,13 @@ export default function CombinedResultPanel({ riskScore, cnnConfidence }: Props)
 
       {/* Inputs summary */}
       <div className="grid grid-cols-2 gap-4">
-        <InputCard label="Stage 1 — Clinical Score" value={riskScore !== null ? `${riskScore} / 22` : null} unit="" />
-        <InputCard label="Stage 2 — CNN Confidence" value={cnnConfidence !== null ? `${Math.round(cnnConfidence * 100)}` : null} unit="%" />
+        <InputCard label={t("combined.stage1_card")} value={riskScore !== null ? `${riskScore} / 22` : null} unit="" notCompleted={t("combined.not_completed")} />
+        <InputCard label={t("combined.stage2_card")} value={cnnConfidence !== null ? `${Math.round(cnnConfidence * 100)}` : null} unit="%" notCompleted={t("combined.not_completed")} />
       </div>
 
       {missing && (
         <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-700">
-          Complete both Stage 1 and Stage 2 before generating the final assessment.
+          {t("combined.incomplete_warning")}
         </div>
       )}
 
@@ -48,7 +50,7 @@ export default function CombinedResultPanel({ riskScore, cnnConfidence }: Props)
 
       <button onClick={submit} disabled={missing || loading}
         className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white font-semibold rounded-xl transition-colors text-sm shadow-sm">
-        {loading ? "Generating…" : "Generate Final Assessment"}
+        {loading ? t("combined.generating") : t("combined.submit")}
       </button>
 
       {result && style && (
@@ -58,7 +60,7 @@ export default function CombinedResultPanel({ riskScore, cnnConfidence }: Props)
           <div className={`bg-white rounded-2xl border border-slate-200 p-4 sm:p-6 ring-2 ${style.ring}`}>
             <div className="flex items-start justify-between gap-3 mb-4">
               <div>
-                <p className="text-xs text-slate-400 uppercase tracking-wide font-medium mb-1">Combined Score</p>
+                <p className="text-xs text-slate-400 uppercase tracking-wide font-medium mb-1">{t("combined.score_label")}</p>
                 <p className="text-5xl font-bold text-slate-800">{pct}<span className="text-2xl text-slate-400 font-normal">%</span></p>
               </div>
               <span className={`px-3 py-1.5 rounded-full text-sm font-bold flex-shrink-0 ${style.badge}`}>{result.recommendation}</span>
@@ -74,20 +76,20 @@ export default function CombinedResultPanel({ riskScore, cnnConfidence }: Props)
           {/* Breakdown table */}
           <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
             <div className="px-4 sm:px-6 py-4 border-b border-slate-100">
-              <p className="text-sm font-semibold text-slate-700">Score Breakdown</p>
+              <p className="text-sm font-semibold text-slate-700">{t("combined.breakdown_title")}</p>
             </div>
             {/* Desktop table */}
             <table className="hidden sm:table w-full text-sm">
               <thead className="bg-slate-50 text-xs text-slate-400 uppercase tracking-wide">
                 <tr>
-                  <th className="text-left px-6 py-3">Component</th>
-                  <th className="text-left px-6 py-3">Value</th>
-                  <th className="text-right px-6 py-3">Weight</th>
+                  <th className="text-left px-6 py-3">{t("combined.col_component")}</th>
+                  <th className="text-left px-6 py-3">{t("combined.col_value")}</th>
+                  <th className="text-right px-6 py-3">{t("combined.col_weight")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 <tr>
-                  <td className="px-6 py-3 text-slate-600">Clinical Risk Score</td>
+                  <td className="px-6 py-3 text-slate-600">{t("combined.clinical_row")}</td>
                   <td className="px-6 py-3 font-medium text-slate-800">
                     {riskScore} / 22
                     <span className={`ml-2 text-xs px-2 py-0.5 rounded-full ${
@@ -99,12 +101,12 @@ export default function CombinedResultPanel({ riskScore, cnnConfidence }: Props)
                   <td className="px-6 py-3 text-right text-slate-500">35% × {result.risk_weight}</td>
                 </tr>
                 <tr>
-                  <td className="px-6 py-3 text-slate-600">Drawing CNN Confidence</td>
+                  <td className="px-6 py-3 text-slate-600">{t("combined.drawing_row")}</td>
                   <td className="px-6 py-3 font-medium text-slate-800">{Math.round((cnnConfidence ?? 0) * 100)}%</td>
                   <td className="px-6 py-3 text-right text-slate-500">65%</td>
                 </tr>
                 <tr className="bg-indigo-50">
-                  <td className="px-6 py-3 font-bold text-slate-800">Combined Score</td>
+                  <td className="px-6 py-3 font-bold text-slate-800">{t("combined.combined_row")}</td>
                   <td className="px-6 py-3 font-bold text-indigo-700 text-base">{pct}%</td>
                   <td className="px-6 py-3" />
                 </tr>
@@ -114,7 +116,7 @@ export default function CombinedResultPanel({ riskScore, cnnConfidence }: Props)
             <div className="sm:hidden divide-y divide-slate-100">
               <div className="px-4 py-3 flex items-center justify-between">
                 <div>
-                  <p className="text-xs text-slate-400 mb-0.5">Clinical Risk Score</p>
+                  <p className="text-xs text-slate-400 mb-0.5">{t("combined.clinical_row")}</p>
                   <p className="font-medium text-slate-800">
                     {riskScore} / 22
                     <span className={`ml-2 text-xs px-2 py-0.5 rounded-full ${
@@ -128,13 +130,13 @@ export default function CombinedResultPanel({ riskScore, cnnConfidence }: Props)
               </div>
               <div className="px-4 py-3 flex items-center justify-between">
                 <div>
-                  <p className="text-xs text-slate-400 mb-0.5">Drawing CNN Confidence</p>
+                  <p className="text-xs text-slate-400 mb-0.5">{t("combined.drawing_row")}</p>
                   <p className="font-medium text-slate-800">{Math.round((cnnConfidence ?? 0) * 100)}%</p>
                 </div>
                 <p className="text-xs text-slate-500">65%</p>
               </div>
               <div className="px-4 py-3 bg-indigo-50 flex items-center justify-between">
-                <p className="font-bold text-slate-800">Combined Score</p>
+                <p className="font-bold text-slate-800">{t("combined.combined_row")}</p>
                 <p className="font-bold text-indigo-700 text-base">{pct}%</p>
               </div>
             </div>
@@ -142,8 +144,8 @@ export default function CombinedResultPanel({ riskScore, cnnConfidence }: Props)
 
           {/* Disclaimer */}
           <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 sm:p-5 text-sm">
-            <p className="font-semibold text-amber-800 mb-1">Medical Disclaimer</p>
-            <p className="text-amber-700 leading-relaxed">This tool is for preliminary screening only and does not constitute a medical diagnosis. Always consult a qualified neurologist for proper evaluation.</p>
+            <p className="font-semibold text-amber-800 mb-1">{t("combined.disclaimer_title")}</p>
+            <p className="text-amber-700 leading-relaxed">{t("combined.disclaimer_body")}</p>
           </div>
         </div>
       )}
@@ -151,13 +153,13 @@ export default function CombinedResultPanel({ riskScore, cnnConfidence }: Props)
   );
 }
 
-function InputCard({ label, value, unit }: { label: string; value: string | null; unit: string }) {
+function InputCard({ label, value, unit, notCompleted }: { label: string; value: string | null; unit: string; notCompleted: string }) {
   return (
     <div className={`rounded-2xl border p-5 ${value !== null ? "bg-white border-slate-200" : "bg-slate-50 border-slate-200 border-dashed"}`}>
       <p className="text-xs text-slate-400 mb-2">{label}</p>
       {value !== null
         ? <p className="text-2xl font-bold text-slate-800">{value}<span className="text-base font-normal text-slate-400">{unit}</span></p>
-        : <p className="text-sm text-slate-400 italic">Not completed</p>
+        : <p className="text-sm text-slate-400 italic">{notCompleted}</p>
       }
     </div>
   );

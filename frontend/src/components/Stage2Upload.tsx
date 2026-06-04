@@ -3,6 +3,7 @@
 import { useState, useRef } from "react";
 import { Camera, Lightbulb, PenLine, RefreshCw, WavesHorizontal, type LucideIcon } from "lucide-react";
 import { fetchStage2, Stage2Result, AnomalyRegion } from "@/lib/api";
+import { useLocale } from "@/lib/i18n";
 
 function regionStyle(intensity: number) {
   if (intensity >= 0.75) return { bg: "bg-rose-50 border-rose-200",   badge: "bg-rose-500",   text: "text-rose-800"   };
@@ -13,6 +14,7 @@ function regionStyle(intensity: number) {
 interface Props { onResult: (result: Stage2Result, confidence: number) => void; onNext: () => void }
 
 export default function Stage2Upload({ onResult, onNext }: Props) {
+  const { t } = useLocale();
   const [drawingType, setDrawingType] = useState<"Spiral" | "Wave">("Spiral");
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
@@ -41,9 +43,9 @@ export default function Stage2Upload({ onResult, onNext }: Props) {
 
   const pct = result ? Math.round(result.confidence * 100) : 0;
   const riskLabel = result
-    ? result.confidence >= 0.7 ? { text: "High Risk",     bg: "bg-rose-100",    text2: "text-rose-700",    bar: "bg-rose-500" }
-    : result.confidence >= 0.4 ? { text: "Moderate Risk", bg: "bg-amber-100",   text2: "text-amber-700",   bar: "bg-amber-400" }
-    :                             { text: "Low Risk",      bg: "bg-emerald-100", text2: "text-emerald-700", bar: "bg-emerald-500" }
+    ? result.confidence >= 0.7 ? { text: t("stage2.high_risk"),     bg: "bg-rose-100",    text2: "text-rose-700",    bar: "bg-rose-500" }
+    : result.confidence >= 0.4 ? { text: t("stage2.moderate_risk"), bg: "bg-amber-100",   text2: "text-amber-700",   bar: "bg-amber-400" }
+    :                             { text: t("stage2.low_risk"),      bg: "bg-emerald-100", text2: "text-emerald-700", bar: "bg-emerald-500" }
     : null;
 
   return (
@@ -51,14 +53,14 @@ export default function Stage2Upload({ onResult, onNext }: Props) {
 
       {/* Instructions */}
       <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-6">
-        <h3 className="text-sm font-semibold text-slate-700 mb-3">How to prepare your drawing</h3>
+        <h3 className="text-sm font-semibold text-slate-700 mb-3">{t("stage2.instructions_title")}</h3>
         <div className="grid grid-cols-2 gap-3">
           {(
             [
-              { Icon: RefreshCw,       title: "Spiral",   desc: "Archimedean spiral — best for PD detection" },
-              { Icon: WavesHorizontal, title: "Wave",     desc: "Continuous wave pattern left-to-right" },
-              { Icon: Lightbulb,       title: "Lighting", desc: "Good lighting, camera directly above paper" },
-              { Icon: PenLine,         title: "Pen",      desc: "Dark pen on plain white paper" },
+              { Icon: RefreshCw,       title: "Spiral",                    desc: t("stage2.spiral_desc") },
+              { Icon: WavesHorizontal, title: "Wave",                      desc: t("stage2.wave_desc") },
+              { Icon: Lightbulb,       title: t("stage2.lighting_title"),  desc: t("stage2.lighting_desc") },
+              { Icon: PenLine,         title: t("stage2.pen_title"),       desc: t("stage2.pen_desc") },
             ] as { Icon: LucideIcon; title: string; desc: string }[]
           ).map(({ Icon, title, desc }) => (
             <div key={title} className="flex items-start gap-3 p-3 bg-slate-50 rounded-xl">
@@ -111,8 +113,8 @@ export default function Stage2Upload({ onResult, onNext }: Props) {
                 <Camera className="w-6 h-6 text-slate-400" />
               </div>
               <div className="text-center">
-                <p className="text-sm font-medium text-slate-600">Drop your image here</p>
-                <p className="text-xs text-slate-400 mt-0.5">or click to browse · PNG, JPG, WEBP</p>
+                <p className="text-sm font-medium text-slate-600">{t("stage2.drop_label")}</p>
+                <p className="text-xs text-slate-400 mt-0.5">{t("stage2.drop_hint")}</p>
               </div>
             </>
           )}
@@ -127,7 +129,7 @@ export default function Stage2Upload({ onResult, onNext }: Props) {
 
       <button onClick={submit} disabled={!file || loading}
         className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white font-semibold rounded-xl transition-colors text-sm shadow-sm">
-        {loading ? "Analyzing…" : "Analyze Drawing"}
+        {loading ? t("stage2.analyzing") : t("stage2.submit")}
       </button>
 
       {/* Results */}
@@ -136,7 +138,7 @@ export default function Stage2Upload({ onResult, onNext }: Props) {
           <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-6">
             <div className="flex items-start justify-between mb-4 gap-3">
               <div>
-                <p className="text-xs text-slate-400 uppercase tracking-wide font-medium mb-1">PD Probability</p>
+                <p className="text-xs text-slate-400 uppercase tracking-wide font-medium mb-1">{t("stage2.pd_prob")}</p>
                 <p className="text-4xl font-bold text-slate-800">{pct}<span className="text-xl text-slate-400 font-normal">%</span></p>
               </div>
               <span className={`px-3 py-1 rounded-full text-sm font-semibold flex-shrink-0 ${riskLabel.bg} ${riskLabel.text2}`}>
@@ -149,20 +151,16 @@ export default function Stage2Upload({ onResult, onNext }: Props) {
             </div>
 
             <p className="text-sm text-slate-600">
-              {result.confidence >= 0.7
-                ? "Drawing patterns suggest high probability of motor impairment consistent with Parkinson's disease."
-                : result.confidence >= 0.4
-                ? "Drawing shows some irregularities. Further evaluation may be warranted."
-                : "Drawing patterns appear within normal range for this analysis."}
+              {result.confidence >= 0.7 ? t("stage2.high_desc")
+                : result.confidence >= 0.4 ? t("stage2.moderate_desc")
+                : t("stage2.low_desc")}
             </p>
           </div>
 
           {result.heatmap_base64 && (
             <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5">
-              <p className="text-sm font-semibold text-slate-700 mb-3">Stroke Irregularity Map</p>
-              <p className="text-xs text-slate-400 mb-4">
-                Red = shaky / high-tremor strokes · Blue = smooth consistent strokes. Numbered circles mark the most irregular regions.
-              </p>
+              <p className="text-sm font-semibold text-slate-700 mb-3">{t("stage2.heatmap_title")}</p>
+              <p className="text-xs text-slate-400 mb-4">{t("stage2.heatmap_desc")}</p>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={`data:image/png;base64,${result.heatmap_base64}`} alt="heatmap" className="w-full rounded-xl" />
             </div>
@@ -170,10 +168,8 @@ export default function Stage2Upload({ onResult, onNext }: Props) {
 
           {result.anomaly_regions && result.anomaly_regions.length > 0 && (
             <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5">
-              <p className="text-sm font-semibold text-slate-700 mb-1">Detected Irregular Regions</p>
-              <p className="text-xs text-slate-400 mb-4">
-                Regions where stroke direction changes most rapidly — a key indicator of motor irregularity.
-              </p>
+              <p className="text-sm font-semibold text-slate-700 mb-1">{t("stage2.anomaly_title")}</p>
+              <p className="text-xs text-slate-400 mb-4">{t("stage2.anomaly_desc")}</p>
               <div className="space-y-2">
                 {result.anomaly_regions.map((region: AnomalyRegion) => {
                   const s = regionStyle(region.intensity);
@@ -185,7 +181,7 @@ export default function Stage2Upload({ onResult, onNext }: Props) {
                       <div className="min-w-0">
                         <p className={`text-sm font-semibold ${s.text}`}>{region.label}</p>
                         <p className="text-xs text-slate-500 mt-0.5">
-                          Attention intensity: {Math.round(region.intensity * 100)}%
+                          {t("stage2.intensity_label")}: {Math.round(region.intensity * 100)}%
                         </p>
                       </div>
                     </div>
@@ -199,7 +195,7 @@ export default function Stage2Upload({ onResult, onNext }: Props) {
             onClick={onNext}
             className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl transition-colors text-sm shadow-sm"
           >
-            Next: View Final Assessment →
+            {t("stage2.next")}
           </button>
         </div>
       )}
