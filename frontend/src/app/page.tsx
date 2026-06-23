@@ -59,6 +59,12 @@ export default function Home() {
               >
                 မြန်မာ
               </button>
+              <button
+                onClick={() => switchLocale("th")}
+                className={`px-2.5 py-1.5 transition-colors ${locale === "th" ? "bg-indigo-600 text-white" : "text-slate-500 hover:bg-slate-50"}`}
+              >
+                ไทย
+              </button>
             </div>
 
             <button

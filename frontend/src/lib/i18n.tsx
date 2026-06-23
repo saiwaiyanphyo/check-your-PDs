@@ -31,18 +31,31 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
   const [locale, setLocale] = useState("en");
   const [messages, setMessages] = useState<Messages>(en as Messages);
 
+  const loadFont = (id: string, href: string) => {
+    if (!document.getElementById(id)) {
+      const link = document.createElement("link");
+      link.id = id;
+      link.rel = "stylesheet";
+      link.href = href;
+      document.head.appendChild(link);
+    }
+  };
+
   const switchLocale = async (newLocale: string) => {
     if (newLocale === "my") {
       const mod = await import("@/messages/my.json");
       setMessages(mod.default as Messages);
-      if (!document.getElementById("font-noto-myanmar")) {
-        const link = document.createElement("link");
-        link.id = "font-noto-myanmar";
-        link.rel = "stylesheet";
-        link.href =
-          "https://fonts.googleapis.com/css2?family=Noto+Sans+Myanmar:wght@400;600;700&display=swap";
-        document.head.appendChild(link);
-      }
+      loadFont(
+        "font-noto-myanmar",
+        "https://fonts.googleapis.com/css2?family=Noto+Sans+Myanmar:wght@400;600;700&display=swap"
+      );
+    } else if (newLocale === "th") {
+      const mod = await import("@/messages/th.json");
+      setMessages(mod.default as Messages);
+      loadFont(
+        "font-noto-thai",
+        "https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;600;700&display=swap"
+      );
     } else {
       setMessages(en as Messages);
     }
