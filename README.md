@@ -1,6 +1,11 @@
 # Check Your PDs
 [![Live Demo](https://img.shields.io/badge/Live%20Demo-check--your--pds.vercel.app-brightgreen)](https://check-your-pds.vercel.app/)
 
+## Live Demo
+
+- **Web App:** https://check-your-pds.vercel.app/
+- **Model Space (Hugging Face):** https://huggingface.co/spaces/maggisai/parkinsons-detection-using-mobilenetv2
+
 _Check Your PDs_ is a two-stage deep learning system for **Parkinson's Disease (PD) pre-detection screening**, developed as an academic research project at the Sirindhorn International Institute of Technology (SIIT), Thammasat University. It combines clinical record analysis (NLP) with hand-drawing image classification to flag individuals who may be at risk of PD and should seek further medical evaluation.
 
 > **Disclaimer:** This is a *preliminary screening tool* targeting the prodromal phase, not a diagnostic system. It does not diagnose Parkinson's Disease. Results should be confirmed by a qualified medical professional.
