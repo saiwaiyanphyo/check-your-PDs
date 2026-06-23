@@ -1,63 +1,74 @@
 # Check Your PDs
 
-_Check Your PDs_ is an academic project developed as the culmination of my bachelor's degree. The application aims to streamline the process of tracking, verifying, and managing professional development (PD) activities, making it easier for users to stay organized and up-to-date with their PD requirements.
+_Check Your PDs_ is a two-stage deep learning system for **Parkinson's Disease (PD) pre-detection screening**, developed as an academic research project at the Sirindhorn International Institute of Technology (SIIT), Thammasat University. It combines clinical record analysis (NLP) with hand-drawing image classification to flag individuals who may be at risk of PD and should seek further medical evaluation.
+
+> **Disclaimer:** This is a *preliminary screening tool* targeting the prodromal phase, not a diagnostic system. It does not diagnose Parkinson's Disease. Results should be confirmed by a qualified medical professional.
+
+## Overview
+
+The system produces a combined risk score from two independent stages:
+
+- **Stage 1 — Clinical NLP Scoring:** Regex-based feature extraction over mixed Thai-English clinical records, with per-symptom weighting tied to clinical relevance (cardinal motor symptoms weighted higher than non-specific ones).
+- **Stage 2 — Hand-Drawing CNN Classification:** A MobileNetV2 transfer-learning model classifies spiral and wave drawings as healthy or PD-indicative, with Grad-CAM heatmaps for interpretability.
+
+The final score fuses both stages (0.35·S₁ + 0.65·S₂), prioritizing the sensitivity/recall tradeoffs that matter in a clinical screening context.
 
 ## Features
 
-- **PD Tracking:** Easily log and monitor your professional development activities.
-- **Verification Workflow:** Submit PD entries for review and approval.
-- **User Dashboard:** Personalized dashboard summarizing PD progress and upcoming deadlines.
-- **Secure Authentication:** Modern, role-based authentication and authorization.
-- **Cross-Platform Interface:** Built with Python (backend) and TypeScript (frontend) for a seamless user experience.
+- **Clinical Record Analysis:** NLP extraction of motor, non-motor, and functional-status indicators from clinical text.
+- **Hand-Drawing Classification:** MobileNetV2-based classification of spiral and wave drawings.
+- **Explainable Predictions:** Grad-CAM heatmaps highlight the drawing regions driving each prediction.
+- **Combined Risk Score:** Weighted fusion of clinical and image-based scores.
+- **Web Interface:** Deployed Gradio app for interactive screening.
 
 ## Technology Stack
 
-- **Backend:** Python (e.g., Django or Flask)
-- **Frontend:** TypeScript (e.g., React, Angular, or Vue)
-- **Others:** See project files for further details
+- **ML Framework:** TensorFlow / Keras (MobileNetV2), trained on Google Colab (T4 GPU)
+- **NLP:** Regex-based extraction, PyThaiNLP for mixed Thai-English text
+- **Visualization:** Grad-CAM (pure PIL/numpy implementation)
+- **Interface:** Gradio
+- **Deployment:** Hugging Face Spaces
 
-## Getting Started
+## Live Demo
 
-1. **Clone this repository**
-    ```bash
-    git clone https://github.com/saiwaiyanphyo/check-your-PDs.git
-    cd check-your-PDs
-    ```
+The screening app is deployed on Hugging Face Spaces:
+`https://huggingface.co/spaces/maggisai/parkinsons-detection-using-mobilenetv2`
 
-2. **Backend Setup**
-    - Install Python dependencies:
-      ```bash
-      pip install -r requirements.txt
-      ```
-    - Run backend server:
-      ```bash
-      python manage.py runserver
-      # or python app.py (depending on the framework)
-      ```
+## Datasets
 
-3. **Frontend Setup**
-    - Install Node dependencies:
-      ```bash
-      npm install
-      ```
-    - Start the frontend server:
-      ```bash
-      npm start
-      ```
+- **Stage 1:** Clinical records from Udon Thani Hospital (mixed Thai-English).
+- **Stage 2:** Kaggle Parkinson's drawings dataset (spiral and wave).
 
-## Contributing
+> **Note:** The two datasets have no patient overlap, so the combined score is *simulated* rather than prospectively validated. This is a core limitation of the current work.
 
-Contributions are welcome! Please feel free to submit issues, feature requests, or pull requests.
+## Results
+
+| Drawing Type | Accuracy | AUC  |
+|--------------|----------|------|
+| Wave         | 85%      | ~0.94 |
+| Spiral       | 79%      | ~0.87 |
+
+Wave drawings outperform spiral, as they more consistently expose sustained fine motor control deficits.
+
+## Future Work
+
+- Brain MRI analysis for structural changes in the substantia nigra.
+- Multimodal learning combining drawings with voice and keystroke data.
+- Prospective validation on a single cohort with overlapping clinical and drawing data.
+
+## Authors
+
+- Sai Wai Yan Phyo (6722790282)
+- Kantapon Makpisut (6622781241)
+- Advisor: Dr. Sasiporn Usanavasin
+- Prof. Thanaruk Theeramunkong
+
+_Sirindhorn International Institute of Technology (SIIT), Thammasat University_
 
 ## License
 
-This project is released under the MIT License.
+Released under the MIT License.
 
 ## Acknowledgements
 
-- Developed as a final year undergraduate project
-- Thanks to all mentors, instructors, and peers who supported its creation
-
----
-
-_For more details, explore the source code and documentation in the repository._
+Developed as an undergraduate research project at SIIT. Thanks to Dr. Sasiporn Usanavasin and all mentors and peers who supported this work.
