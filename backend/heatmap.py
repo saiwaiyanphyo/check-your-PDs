@@ -288,6 +288,16 @@ def generate_heatmap(
     attn_big = np.array(attn_pil.resize((SIZE, SIZE), Image.LANCZOS)).astype(float) / 255.0
 
     # ── Detect anomaly regions on 224×224 map ──
+    # Suppress false positives in ink-free regions: blur can spread energy from
+    # high-score patches into empty neighbouring areas, causing ghost peaks.
+    img_mask = image.convert("L").resize((224, 224))
+    arr_mask = np.array(img_mask, dtype=np.int16)
+    thresh_m = 180 if int(arr_mask.mean()) > 128 else 80
+    ink_presence = ((arr_mask < thresh_m).astype(np.uint8) * 255)
+    ink_dilated = np.array(
+        Image.fromarray(ink_presence).filter(ImageFilter.MaxFilter(size=21))
+    ).astype(float) / 255.0
+    attn_224 = attn_224 * ink_dilated
     anomaly_regions = find_anomaly_regions(attn_224, max_regions=3)
 
     # ── Build image panels ──
